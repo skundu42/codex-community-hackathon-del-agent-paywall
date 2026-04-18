@@ -250,7 +250,7 @@ export function SimpleDemoApp() {
                   Create paid endpoint
                 </Button>
 
-                {error ? <Alert type="error" message={error} showIcon /> : null}
+                {error ? <Alert type="error" title={error} showIcon /> : null}
               </Space>
             </Space>
           </Card>
@@ -320,7 +320,7 @@ export function SimpleDemoApp() {
                 <Alert
                   type="success"
                   showIcon
-                  message="Next step"
+                  title="Next step"
                   description="Use the live demo page to create a paid invocation, complete payment, and inspect the unlocked API response."
                 />
               </Space>

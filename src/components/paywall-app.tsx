@@ -339,7 +339,7 @@ export function PaywallApp({
         </div>
       </section>
 
-      {error ? <Alert type="error" message={error} showIcon /> : null}
+      {error ? <Alert type="error" title={error} showIcon /> : null}
 
       <div className="content-grid">
         <Card className="section-surface">
@@ -497,7 +497,7 @@ export function PaywallApp({
                 <Alert
                   type={payment.status === "paid" ? "success" : payment.status === "failed" ? "error" : "info"}
                   showIcon
-                  message={payment.statusMessage}
+                  title={payment.statusMessage}
                 />
 
                 <Descriptions
