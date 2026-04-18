@@ -41,3 +41,17 @@ test("validateLandingPageRoastInput requires url or marketing copy", () => {
   );
 });
 
+test("validateRouteInput rejects methods other than GET and POST", async () => {
+  await assert.rejects(
+    () =>
+      validateRouteInput({
+        providerName: "Partner API",
+        routeName: "Legacy method route",
+        routeKind: "external_proxy",
+        upstreamUrl: "https://api.example.com/private",
+        httpMethod: "PUT" as never,
+        priceAmount: "0.05",
+      }),
+    /HTTP method must be one of: GET, POST/,
+  );
+});

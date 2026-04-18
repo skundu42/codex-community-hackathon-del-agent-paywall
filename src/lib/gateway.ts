@@ -17,7 +17,7 @@ export const DEFAULT_CURRENCY: CurrencyCode = "USDC";
 export const DEFAULT_PRICE_AMOUNT = "0.02";
 export const FEATURED_ROUTE_SLUG = "landing-page-roast";
 
-const SUPPORTED_METHODS: HttpMethod[] = ["GET", "POST", "PUT", "PATCH", "DELETE"];
+const SUPPORTED_METHODS: HttpMethod[] = ["GET", "POST"];
 const BLOCKED_HOSTS = new Set([
   "localhost",
   "127.0.0.1",
@@ -301,7 +301,7 @@ export function validateInvocationPayloadForRoute(
 }
 
 function canSendBody(method: HttpMethod) {
-  return !["GET", "DELETE"].includes(method);
+  return method !== "GET";
 }
 
 function buildForwardHeaders(route: ApiRoute) {

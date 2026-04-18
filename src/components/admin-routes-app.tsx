@@ -230,9 +230,6 @@ export function AdminRoutesApp({
                       options={[
                         { label: "POST", value: "POST" },
                         { label: "GET", value: "GET" },
-                        { label: "PUT", value: "PUT" },
-                        { label: "PATCH", value: "PATCH" },
-                        { label: "DELETE", value: "DELETE" },
                       ]}
                     />
                   </Form.Item>

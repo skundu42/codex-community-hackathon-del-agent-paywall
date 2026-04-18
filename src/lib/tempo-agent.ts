@@ -261,7 +261,7 @@ export async function invokeRouteAsDemoAgent(options: {
 
   const origin = new URL(options.requestUrl).origin;
   const gatewayUrl = buildGatewayUrl(origin, route.slug);
-  const bodyless = route.httpMethod === "GET" || route.httpMethod === "DELETE";
+  const bodyless = route.httpMethod === "GET";
   const response = await mppx.fetch(gatewayUrl, {
     method: route.httpMethod ?? "POST",
     headers: bodyless

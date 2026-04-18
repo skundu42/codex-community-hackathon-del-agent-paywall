@@ -12,7 +12,7 @@ export function buildGatewayUrl(origin: string, slug: string) {
 export function buildRouteContract(origin: string, route: ApiRoute | PublicApiRoute) {
   const gatewayUrl = buildGatewayUrl(origin, route.slug);
   const method = route.httpMethod ?? "POST";
-  const canSendBody = !["GET", "DELETE"].includes(method);
+  const canSendBody = method !== "GET";
   const sampleBody = JSON.stringify(
     {
       marketingCopy:

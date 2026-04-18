@@ -24,7 +24,7 @@ At `/dashboard`, a seller can:
 
 Agents call the paid endpoint at:
 
-- `GET|POST|PUT|PATCH|DELETE /api/mpp/routes/:slug/invoke`
+- `GET|POST /api/mpp/routes/:slug/invoke`
 
 Behavior:
 
@@ -127,7 +127,7 @@ Public route discovery:
 
 MPP gateway:
 
-- `GET|POST|PUT|PATCH|DELETE /api/mpp/routes/:slug/invoke`
+- `GET|POST /api/mpp/routes/:slug/invoke`
 
 Featured browser paywall flow:
 

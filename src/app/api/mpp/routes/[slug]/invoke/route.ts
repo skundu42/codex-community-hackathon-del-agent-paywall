@@ -66,24 +66,3 @@ export async function POST(
 ) {
   return handleInvocation(request, context);
 }
-
-export async function PUT(
-  request: Request,
-  context: { params: Promise<{ slug: string }> },
-) {
-  return handleInvocation(request, context);
-}
-
-export async function PATCH(
-  request: Request,
-  context: { params: Promise<{ slug: string }> },
-) {
-  return handleInvocation(request, context);
-}
-
-export async function DELETE(
-  request: Request,
-  context: { params: Promise<{ slug: string }> },
-) {
-  return handleInvocation(request, context);
-}

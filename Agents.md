@@ -131,7 +131,7 @@ Public route discovery:
 
 MPP-protected agent invocation:
 
-- `GET|POST|PUT|PATCH|DELETE /api/mpp/routes/:slug/invoke`
+- `GET|POST /api/mpp/routes/:slug/invoke`
 
 Featured browser paywall flow:
 
@@ -197,7 +197,7 @@ If you change external proxy behavior, review:
 
 - upstream validation
 - header forwarding
-- body handling for `GET` / `DELETE`
+- body handling for `GET`
 - error surfacing for upstream 4xx/5xx responses
 
 ## Important Files

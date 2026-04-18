@@ -28,7 +28,7 @@ import { AppShell } from "@/components/ui/app-shell";
 import { formatStatusLabel, getStatusColor } from "@/lib/ui";
 import type { ApiInvocationResult, PublicApiRoute } from "@/lib/types";
 
-const BODYLESS_METHODS = new Set(["GET", "DELETE"]);
+const BODYLESS_METHODS = new Set(["GET"]);
 const AGENT_FUND_AMOUNT = "0.10";
 
 type RouteContractPayload = {

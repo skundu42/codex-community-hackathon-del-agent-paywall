@@ -1,5 +1,5 @@
 export type CurrencyCode = "USDC";
-export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+export type HttpMethod = "GET" | "POST";
 export type PaymentProvider = "mock" | "tempo_testnet" | "stripe_mpp";
 export type RouteKind = "internal_demo" | "external_proxy";
 export type CallerMode = "browser" | "agent";
