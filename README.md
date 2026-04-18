@@ -8,6 +8,10 @@ AgentPaywall turns an API into a **seller-owned paid endpoint**. Providers creat
 
 Using this any existing api can be turned into agentic APIs.
 
+## Demo Video
+
+[Watch the demo video on YouTube](https://youtu.be/XP0RncUUWUI)
+
 - A **seller dashboard** for registering providers and publishing paid proxy routes
 - A **buyer / agent demo flow** that provisions and funds a Tempo testnet wallet, then invokes a paid route end to end
 
