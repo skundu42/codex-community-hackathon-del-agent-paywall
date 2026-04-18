@@ -1,84 +1,57 @@
+<p align="center">
+  <img src="./public/logo.svg" alt="AgentPaywall logo" width="720" />
+</p>
+
 # AgentPaywall
 
-AgentPaywall is a Next.js app for publishing and consuming **paid API endpoints on Tempo**.
+A paid API gateway for machine-to-machine commerce on **Tempo + MPP**.
 
-The current product has three visible surfaces:
+AgentPaywall turns an API into a **seller-owned paid endpoint**. Providers create a route, attach a Tempo wallet, and share a stable gateway URL. Agents can call that endpoint, satisfy an **MPP payment challenge**, retry, and receive the result only after payment verification.
 
-- A **seller dashboard** for registering a provider account and creating paid proxy routes
-- A **demo flow** that generates a monetized endpoint, spins up a demo agent wallet, funds it, and invokes the route
-- A retained **featured buyer demo** for the built-in `landing-page-roast` route
+This repo is no longer just a single "landing page roast" demo. The shipped app has two real product surfaces plus one retained featured demo:
 
-## What The App Does
+- A **seller dashboard** for registering providers and publishing paid proxy routes
+- A **buyer / agent demo flow** that provisions and funds a Tempo testnet wallet, then invokes a paid route end to end
+- A retained **featured buyer paywall demo** for the built-in `landing-page-roast` route
 
-### Seller dashboard
+## Why we built this
 
-At `/dashboard`, a seller can:
+Most API monetization still assumes humans, subscriptions, dashboards, and pre-funded accounts. Agents do not work that way. They need:
 
-- register with email, password, and Tempo wallet address
-- create a paid external proxy route
-- inspect the generated gateway contract
-- copy example `curl` and `mppx` commands
-- review recent invocations and payment proof
+- a machine-readable price
+- a machine-readable payment challenge
+- a way to retry automatically after settlement
+- proof that execution happened only after payment
 
-### Agent-facing paid gateway
+AgentPaywall packages that flow into a Next.js gateway that is easy to demo and realistic enough to extend.
 
-Agents call the paid endpoint at:
+## What We Built
 
-- `GET|POST /api/mpp/routes/:slug/invoke`
 
-Behavior:
 
-1. The gateway validates the route and request body.
-2. If payment is missing, it returns `402 Payment Required`.
-3. The caller retries with a valid Tempo / MPP payment credential.
-4. After verification, the gateway executes the route and returns the result.
-5. Successful responses include a `Payment-Receipt` header.
 
-### Demo flow
+## Tech Stack
 
-At `/`, the app can:
+- `Next.js 16` App Router
+- `React 19`
+- `TypeScript`
+- `Ant Design`
+- `mppx`
+- `Tempo testnet`
 
-- create a demo paid endpoint
-- provision a fresh demo agent wallet
-- fund that wallet on Tempo testnet
-- invoke the paid route and show the unlocked response
-
-This is the fastest way to see the full flow without manually wiring a seller account first.
-
-## Route Types
-
-The app supports two route kinds:
-
-- `external_proxy`: seller-owned paid proxy to an upstream API
-- `internal_demo`: built-in route execution, currently the featured `landing-page-roast`
-
-The main product direction is `external_proxy`.
-
-## Payment Modes
-
-- `mock`: safest local mode and test mode
-- `tempo_testnet`: direct Tempo testnet MPP flow
-- `stripe_mpp`: older browser deposit flow retained for compatibility
-
-Notes:
-
-- The MPP-protected route gateway lives at `src/lib/mpp.ts`.
-- The browser-oriented payment session flow still exists for the featured demo path and is handled separately in `src/lib/payment-provider.ts`.
-
-## Run Locally
+## Local Setup
 
 ```bash
 npm install
+cp .env.example .env.local
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Environment
+## Environment Variables
 
-Copy `.env.example` to `.env.local`.
-
-Example variables:
+Example `.env.local`:
 
 ```env
 PAYMENTS_PROVIDER=mock
@@ -91,78 +64,6 @@ APP_BASE_URL=http://localhost:3000
 ADMIN_TOKEN=
 ```
 
-Guidance:
-
-- Use `PAYMENTS_PROVIDER=mock` for local development unless you are explicitly testing Tempo.
-- `SESSION_SECRET` secures seller dashboard sessions.
-- `MPP_SECRET_KEY` signs and verifies MPP challenges.
-- `DATABASE_URL` enables Postgres persistence. Without it, the app falls back to in-memory storage.
-- `APP_BASE_URL` is used for building absolute links and contracts.
-- `ADMIN_TOKEN` only applies to the legacy admin bootstrap endpoint.
-
-## Main Routes And APIs
-
-Pages:
-
-- `/`
-- `/dashboard`
-- `/dashboard/routes/[routeId]`
-- `/demo/[slug]`
-
-Auth APIs:
-
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `POST /api/auth/logout`
-
-Seller APIs:
-
-- `GET /api/dashboard/routes`
-- `POST /api/dashboard/routes`
-- `GET /api/dashboard/routes/:routeId`
-
-Public route discovery:
-
-- `GET /api/routes/:slug`
-
-MPP gateway:
-
-- `GET|POST /api/mpp/routes/:slug/invoke`
-
-Featured browser paywall flow:
-
-- `POST /api/routes/:slug/invocations`
-- `GET /api/invocations/:invocationId`
-- `POST /api/invocations/:invocationId/execute`
-- `GET /api/invocations/:invocationId/result`
-- `GET /api/payments/:paymentId/status`
-- `POST /api/payments/:paymentId/simulate`
-
-Demo helper APIs:
-
-- `POST /api/demo/routes`
-- `GET|POST /api/demo/upstream`
-- `POST /api/demo/routes/:slug/agent`
-- `POST /api/demo/routes/:slug/agent/fund`
-- `POST /api/demo/routes/:slug/agent/invoke`
-
-## Persistence
-
-The app supports:
-
-- Postgres persistence when `DATABASE_URL` is set
-- in-memory storage when no database is configured
-
-The data model includes:
-
-- providers
-- provider sessions
-- API routes
-- invocations
-- payment sessions
-
-The featured `landing-page-roast` route is seeded automatically.
-
 ## Verification
 
 ```bash
@@ -171,10 +72,11 @@ npm run test
 npm run build
 ```
 
-## Repo Pointers
+## What’s Next
 
-- [`/Users/sk/dev/mpp-api-gateway/src/lib/mpp.ts`](/Users/sk/dev/mpp-api-gateway/src/lib/mpp.ts) contains the MPP-protected invoke flow
-- [`/Users/sk/dev/mpp-api-gateway/src/lib/store.ts`](/Users/sk/dev/mpp-api-gateway/src/lib/store.ts) contains persistence and schema bootstrapping
-- [`/Users/sk/dev/mpp-api-gateway/src/lib/gateway.ts`](/Users/sk/dev/mpp-api-gateway/src/lib/gateway.ts) contains route validation, SSRF protection, and proxy execution
-- [`/Users/sk/dev/mpp-api-gateway/src/lib/tempo-agent.ts`](/Users/sk/dev/mpp-api-gateway/src/lib/tempo-agent.ts) contains the demo agent wallet flow
-- [`/Users/sk/dev/mpp-api-gateway/src/components/dashboard-app.tsx`](/Users/sk/dev/mpp-api-gateway/src/components/dashboard-app.tsx) and [`/Users/sk/dev/mpp-api-gateway/src/components/route-detail-app.tsx`](/Users/sk/dev/mpp-api-gateway/src/components/route-detail-app.tsx) drive the seller experience
+The current hackathon version already demonstrates the core value: agents can pay per call, retry, and unlock results through an MPP-aware gateway. Natural next steps are:
+
+- productionizing seller auth and operational tooling
+- expanding external proxy support and upstream observability
+- strengthening Tempo testnet and wallet lifecycle flows
+- improving deployment ergonomics for real provider onboarding
