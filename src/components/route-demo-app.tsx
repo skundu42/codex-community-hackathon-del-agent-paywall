@@ -385,9 +385,9 @@ export function RouteDemoApp({ slug }: { slug: string }) {
                 <Steps
                   current={currentStep}
                   items={[
-                    { title: "Create request", description: "Build the paid invocation" },
-                    { title: "Complete payment", description: "Verify payment on Tempo" },
-                    { title: "Reveal response", description: "Unlock the API result" },
+                    { title: "Create request", content: "Build the paid invocation" },
+                    { title: "Complete payment", content: "Verify payment on Tempo" },
+                    { title: "Reveal response", content: "Unlock the API result" },
                   ]}
                 />
                 <Descriptions
@@ -429,7 +429,7 @@ export function RouteDemoApp({ slug }: { slug: string }) {
           </div>
         </section>
 
-        {error ? <Alert type="error" message={error} showIcon /> : null}
+        {error ? <Alert type="error" title={error} showIcon /> : null}
 
         <div className="content-grid">
           <Card className="section-surface">
@@ -446,7 +446,7 @@ export function RouteDemoApp({ slug }: { slug: string }) {
                 <Alert
                   type="info"
                   showIcon
-                  message={`${details.route.httpMethod} requests do not send a request body.`}
+                  title={`${details.route.httpMethod} requests do not send a request body.`}
                 />
               ) : (
                 <div>
@@ -554,7 +554,7 @@ export function RouteDemoApp({ slug }: { slug: string }) {
                         : "info"
                   }
                   showIcon
-                  message={payment.statusMessage}
+                  title={payment.statusMessage}
                 />
               ) : null}
 
@@ -596,7 +596,7 @@ export function RouteDemoApp({ slug }: { slug: string }) {
                 <Alert
                   type="success"
                   showIcon
-                  message="Payment complete. Premium response unlocked."
+                  title="Payment complete. Premium response unlocked."
                   description={
                     paymentReference
                       ? `Payment reference: ${paymentReference}`
