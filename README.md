@@ -4,15 +4,12 @@
 
 # AgentPaywall
 
-A paid API gateway for machine-to-machine commerce on **Tempo + MPP**.
-
 AgentPaywall turns an API into a **seller-owned paid endpoint**. Providers create a route, attach a Tempo wallet, and share a stable gateway URL. Agents can call that endpoint, satisfy an **MPP payment challenge**, retry, and receive the result only after payment verification.
 
-This repo is no longer just a single "landing page roast" demo. The shipped app has two real product surfaces plus one retained featured demo:
+Using this any existing api can be turned into agentic APIs.
 
 - A **seller dashboard** for registering providers and publishing paid proxy routes
 - A **buyer / agent demo flow** that provisions and funds a Tempo testnet wallet, then invokes a paid route end to end
-- A retained **featured buyer paywall demo** for the built-in `landing-page-roast` route
 
 ## Why we built this
 
@@ -23,21 +20,12 @@ Most API monetization still assumes humans, subscriptions, dashboards, and pre-f
 - a way to retry automatically after settlement
 - proof that execution happened only after payment
 
-AgentPaywall packages that flow into a Next.js gateway that is easy to demo and realistic enough to extend.
-
-## What We Built
-
-
-
-
 ## Tech Stack
 
-- `Next.js 16` App Router
-- `React 19`
-- `TypeScript`
-- `Ant Design`
 - `mppx`
 - `Tempo testnet`
+- `Next.js 16`
+- `TypeScript`
 
 ## Local Setup
 
@@ -74,7 +62,7 @@ npm run build
 
 ## What’s Next
 
-The current hackathon version already demonstrates the core value: agents can pay per call, retry, and unlock results through an MPP-aware gateway. Natural next steps are:
+This version already demonstrates the core value: agents can pay per call, retry, and unlock results through an MPP-aware gateway. Natural next steps are:
 
 - productionizing seller auth and operational tooling
 - expanding external proxy support and upstream observability
