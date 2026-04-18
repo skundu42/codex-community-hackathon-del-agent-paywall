@@ -3,7 +3,7 @@ import type { ApiRoute, PublicApiRoute } from "@/lib/types";
 
 export const TEMPO_TESTNET_CHAIN_ID = 42431;
 export const TEMPO_TESTNET_RPC_URL = "https://rpc.moderato.tempo.xyz";
-export const TEMPO_EXPLORER_BASE_URL = "https://explore.tempo.xyz";
+export const TEMPO_EXPLORER_BASE_URL = "https://explore.testnet.tempo.xyz";
 
 export function buildGatewayUrl(origin: string, slug: string) {
   return `${origin}/api/mpp/routes/${slug}/invoke`;
@@ -11,13 +11,18 @@ export function buildGatewayUrl(origin: string, slug: string) {
 
 export function buildRouteContract(origin: string, route: ApiRoute | PublicApiRoute) {
   const gatewayUrl = buildGatewayUrl(origin, route.slug);
+  const method = route.httpMethod ?? "POST";
+  const canSendBody = !["GET", "DELETE"].includes(method);
   const sampleBody = JSON.stringify(
     {
-      prompt: "Summarize the latest billing event",
+      marketingCopy:
+        "Turn premium APIs into pay-per-call products with Tempo machine payments.",
     },
     null,
     2,
   );
+  const compactBody = sampleBody.replace(/\n/g, "");
+  const bodySegment = canSendBody ? ` -H 'Content-Type: application/json' -d '${compactBody}'` : "";
 
   return {
     gatewayUrl,
@@ -30,8 +35,8 @@ export function buildRouteContract(origin: string, route: ApiRoute | PublicApiRo
       rpcUrl: TEMPO_TESTNET_RPC_URL,
     },
     examples: {
-      curl: `curl -X POST ${gatewayUrl} -H 'Content-Type: application/json' -d '${sampleBody.replace(/\n/g, "")}'`,
-      mppx: `npx mppx ${gatewayUrl} -X POST -H 'Content-Type: application/json' -d '${sampleBody.replace(/\n/g, "")}'`,
+      curl: `curl -X ${method} ${gatewayUrl}${bodySegment}`,
+      mppx: `npx mppx ${gatewayUrl} -X ${method}${bodySegment}`,
       sampleBody,
     },
   };

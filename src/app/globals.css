@@ -255,6 +255,53 @@ pre {
   font-size: 1.25rem;
 }
 
+.agent-badge {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  padding: 18px 20px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top right, rgba(47, 140, 255, 0.18), transparent 36%),
+    linear-gradient(135deg, rgba(18, 86, 214, 0.08), rgba(255, 255, 255, 0.92));
+  border: 1px solid rgba(18, 86, 214, 0.14);
+}
+
+.agent-badge__icon {
+  width: 58px;
+  height: 58px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #1256d6, #2f8cff);
+  color: #fff;
+  font-size: 1.4rem;
+  box-shadow: 0 16px 30px rgba(18, 86, 214, 0.2);
+}
+
+.agent-badge__body {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.agent-badge__label {
+  color: #1256d6;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.agent-badge__value {
+  overflow-wrap: anywhere;
+  font-size: 0.96rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
 .hero-grid,
 .content-grid,
 .detail-grid {

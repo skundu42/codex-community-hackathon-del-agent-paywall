@@ -3,6 +3,5 @@ export function getExplorerTransactionUrl(reference?: string) {
     return null;
   }
 
-  return `https://explore.tempo.xyz/tx/${reference}`;
+  return `https://explore.testnet.tempo.xyz/tx/${reference}`;
 }
-

@@ -14,7 +14,7 @@ async function parseJsonBody(request: Request): Promise<JsonValue | undefined> {
   return (await request.clone().json()) as JsonValue;
 }
 
-export async function POST(
+async function handleInvocation(
   request: Request,
   context: { params: Promise<{ slug: string }> },
 ) {
@@ -51,4 +51,39 @@ export async function POST(
       { status: 400 },
     );
   }
+}
+
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ slug: string }> },
+) {
+  return handleInvocation(request, context);
+}
+
+export async function POST(
+  request: Request,
+  context: { params: Promise<{ slug: string }> },
+) {
+  return handleInvocation(request, context);
+}
+
+export async function PUT(
+  request: Request,
+  context: { params: Promise<{ slug: string }> },
+) {
+  return handleInvocation(request, context);
+}
+
+export async function PATCH(
+  request: Request,
+  context: { params: Promise<{ slug: string }> },
+) {
+  return handleInvocation(request, context);
+}
+
+export async function DELETE(
+  request: Request,
+  context: { params: Promise<{ slug: string }> },
+) {
+  return handleInvocation(request, context);
 }

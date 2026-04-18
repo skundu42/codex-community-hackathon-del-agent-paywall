@@ -22,7 +22,19 @@ import {
 import type { ApiRoute, JsonValue, PaymentReceiptPayload, PaymentSession } from "@/lib/types";
 
 function getMppSecretKey() {
-  return appEnv.mppSecretKey ?? crypto.randomBytes(32).toString("base64");
+  if (appEnv.mppSecretKey) {
+    return appEnv.mppSecretKey;
+  }
+
+  const runtime = globalThis as typeof globalThis & {
+    __agentPaywallMppSecretKey?: string;
+  };
+
+  if (!runtime.__agentPaywallMppSecretKey) {
+    runtime.__agentPaywallMppSecretKey = crypto.randomBytes(32).toString("base64");
+  }
+
+  return runtime.__agentPaywallMppSecretKey;
 }
 
 function responseWithStoredReceipt(response: Response, receipt: Receipt.Receipt) {

@@ -12,8 +12,18 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  const normalizedBody =
+    typeof body.prompt === "string" &&
+    body.prompt.trim() &&
+    typeof body.marketingCopy !== "string" &&
+    typeof body.url !== "string"
+      ? {
+          ...body,
+          marketingCopy: body.prompt,
+        }
+      : body;
   const result = runLandingPageRoast(
-    validateLandingPageRoastInput(body as never),
+    validateLandingPageRoastInput(normalizedBody as never),
   );
 
   return Response.json(result);
