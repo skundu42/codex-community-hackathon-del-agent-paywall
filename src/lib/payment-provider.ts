@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
 
 import { appEnv } from "@/lib/env";
-import { SERVICE_CURRENCY, SERVICE_PRICE_AMOUNT } from "@/lib/roast";
+import { DEFAULT_CURRENCY } from "@/lib/gateway";
 import {
   createPaymentSession,
+  getInvocation,
   getPaymentSession,
-  getRequest,
   setPaymentStatus,
-  setRequestStatus,
-  updateRequest,
+  setInvocationStatus,
+  updateInvocation,
 } from "@/lib/store";
 import type { PaymentSession } from "@/lib/types";
 
@@ -16,15 +16,15 @@ export function getPaymentProviderLabel() {
   return appEnv.provider === "mock" ? "Mock Tempo" : "Stripe MPP";
 }
 
-export async function initiatePaymentForRequest(requestId: string) {
-  const request = getRequest(requestId);
+export async function initiatePaymentForInvocation(invocationId: string) {
+  const invocation = getInvocation(invocationId);
 
-  if (!request) {
-    throw new Error("Service request not found.");
+  if (!invocation) {
+    throw new Error("Invocation not found.");
   }
 
-  if (request.paymentSessionId) {
-    const existing = getPaymentSession(request.paymentSessionId);
+  if (invocation.paymentSessionId) {
+    const existing = getPaymentSession(invocation.paymentSessionId);
     if (existing) {
       return existing;
     }
@@ -38,16 +38,16 @@ export async function initiatePaymentForRequest(requestId: string) {
 
   const session = createPaymentSession({
     id: randomUUID(),
-    serviceRequestId: request.id,
-    amount: SERVICE_PRICE_AMOUNT,
-    currency: SERVICE_CURRENCY,
+    invocationId: invocation.id,
+    amount: invocation.priceAmount,
+    currency: invocation.currency ?? DEFAULT_CURRENCY,
     provider: "mock",
     status: "pending",
-    mppReference: `mpp_demo_${request.id.slice(0, 8)}`,
+    mppReference: `mpp_demo_${invocation.id.slice(0, 8)}`,
     statusMessage: "Awaiting payment approval in demo mode.",
   });
 
-  updateRequest(requestId, {
+  updateInvocation(invocationId, {
     paymentSessionId: session.id,
     status: "awaiting_payment",
   });
@@ -93,7 +93,7 @@ export async function simulatePayment(paymentId: string): Promise<PaymentSession
     throw new Error("Failed to update payment session.");
   }
 
-  setRequestStatus(payment.serviceRequestId, "paid");
+  setInvocationStatus(payment.invocationId, "paid");
 
   return updatedPayment;
 }

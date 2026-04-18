@@ -1,12 +1,14 @@
 import type {
+  ApiInvocation,
+  ApiInvocationResult,
+  ApiRoute,
   PaymentSession,
   PaymentStatus,
-  RoastResult,
-  ServiceRequest,
-  ServiceRequestStatus,
+  InvocationStatus,
 } from "@/lib/types";
 
-const requests = new Map<string, ServiceRequest>();
+const routes = new Map<string, ApiRoute>();
+const invocations = new Map<string, ApiInvocation>();
 const payments = new Map<string, PaymentSession>();
 
 function now() {
@@ -24,59 +26,76 @@ function mergeUpdatedAt<T extends { updatedAt: string }>(
   };
 }
 
-export function listRequests() {
-  return [...requests.values()];
+export function listRoutes() {
+  return [...routes.values()];
 }
 
-export function createRequest(
-  request: Omit<ServiceRequest, "createdAt" | "updatedAt">,
-): ServiceRequest {
+export function createRoute(
+  route: Omit<ApiRoute, "createdAt" | "updatedAt">,
+): ApiRoute {
   const created = {
-    ...request,
+    ...route,
     createdAt: now(),
     updatedAt: now(),
   };
 
-  requests.set(created.id, created);
+  routes.set(created.id, created);
   return created;
 }
 
-export function getRequest(requestId: string) {
-  return requests.get(requestId);
+export function getRoute(routeId: string) {
+  return routes.get(routeId);
 }
 
-export function updateRequest(
-  requestId: string,
-  updates: Partial<ServiceRequest>,
-): ServiceRequest | undefined {
-  const existing = requests.get(requestId);
+export function createInvocation(
+  invocation: Omit<ApiInvocation, "createdAt" | "updatedAt">,
+): ApiInvocation {
+  const created = {
+    ...invocation,
+    createdAt: now(),
+    updatedAt: now(),
+  };
+
+  invocations.set(created.id, created);
+  return created;
+}
+
+export function getInvocation(invocationId: string) {
+  return invocations.get(invocationId);
+}
+
+export function updateInvocation(
+  invocationId: string,
+  updates: Partial<ApiInvocation>,
+): ApiInvocation | undefined {
+  const existing = invocations.get(invocationId);
 
   if (!existing) {
     return undefined;
   }
 
   const updated = mergeUpdatedAt(existing, updates);
-  requests.set(requestId, updated);
+  invocations.set(invocationId, updated);
   return updated;
 }
 
-export function setRequestStatus(
-  requestId: string,
-  status: ServiceRequestStatus,
+export function setInvocationStatus(
+  invocationId: string,
+  status: InvocationStatus,
   errorMessage?: string,
 ) {
-  return updateRequest(requestId, {
+  return updateInvocation(invocationId, {
     status,
     errorMessage,
   });
 }
 
-export function attachRequestResult(
-  requestId: string,
-  result: RoastResult,
+export function attachInvocationResult(
+  invocationId: string,
+  result: ApiInvocationResult,
   transactionReference?: string,
 ) {
-  return updateRequest(requestId, {
+  return updateInvocation(invocationId, {
     status: "completed",
     resultPayload: result,
     transactionReference,

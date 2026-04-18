@@ -1,14 +1,14 @@
-import { initiatePaymentForRequest } from "@/lib/payment-provider";
+import { initiatePaymentForInvocation } from "@/lib/payment-provider";
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { requestId?: string };
+    const body = (await request.json()) as { invocationId?: string };
 
-    if (!body.requestId) {
-      return Response.json({ error: "requestId is required." }, { status: 400 });
+    if (!body.invocationId) {
+      return Response.json({ error: "invocationId is required." }, { status: 400 });
     }
 
-    const payment = await initiatePaymentForRequest(body.requestId);
+    const payment = await initiatePaymentForInvocation(body.invocationId);
     return Response.json({ payment });
   } catch (error) {
     return Response.json(

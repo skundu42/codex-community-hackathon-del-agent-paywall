@@ -38,7 +38,8 @@ a {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -212,7 +213,8 @@ p {
 }
 
 .field input,
-.field textarea {
+.field textarea,
+.field select {
   width: 100%;
   border: 1px solid rgba(55, 36, 22, 0.14);
   border-radius: 18px;
@@ -223,7 +225,8 @@ p {
 }
 
 .field input:focus,
-.field textarea:focus {
+.field textarea:focus,
+.field select:focus {
   outline: none;
   border-color: rgba(186, 74, 26, 0.42);
   transform: translateY(-1px);

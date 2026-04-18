@@ -3,14 +3,7 @@ import crypto from "node:crypto";
 import Stripe from "stripe";
 
 import { appEnv } from "@/lib/env";
-import { SERVICE_PRICE_AMOUNT } from "@/lib/roast";
-import {
-  attachRequestResult,
-  getRequest,
-  setRequestStatus,
-  updateRequest,
-} from "@/lib/store";
-import type { RoastResult } from "@/lib/types";
+import type { JsonValue } from "@/lib/types";
 
 const TEMPO_TESTNET_PATH_USD = "0x20c0000000000000000000000000000000000000";
 const TEMPO_MAINNET_USDC = "0x20c000000000000000000000b9537d11c60e8b50";
@@ -18,7 +11,7 @@ const DEPOSIT_TTL_MS = 5 * 60 * 1000;
 
 const depositCache = new Map<
   string,
-  { expiresAt: number; paymentIntentId: string; requestId: string }
+  { expiresAt: number; paymentIntentId: string; resourceId: string }
 >();
 
 function getStripeClient() {
@@ -54,7 +47,12 @@ function pruneDeposits() {
   }
 }
 
-async function createPayToAddress(request: Request, requestId: string) {
+async function createPayToAddress(
+  request: Request,
+  resourceId: string,
+  amount: string,
+  metadata: Record<string, string>,
+) {
   pruneDeposits();
 
   const authHeader = request.headers.get("authorization");
@@ -82,7 +80,7 @@ async function createPayToAddress(request: Request, requestId: string) {
       }
 
       const cached = depositCache.get(payToAddress);
-      if (!cached || cached.requestId !== requestId) {
+      if (!cached || cached.resourceId !== resourceId) {
         throw new Error("Pay-to address is unknown or expired.");
       }
 
@@ -91,14 +89,14 @@ async function createPayToAddress(request: Request, requestId: string) {
   }
 
   const stripe = getStripeClient();
-  const amountInCents = Math.round(Number(SERVICE_PRICE_AMOUNT) * 100);
+  const amountInCents = Math.round(Number(amount) * 100);
   const paymentIntent = await stripe.paymentIntents.create({
     amount: amountInCents,
     currency: "usd",
     confirm: true,
     metadata: {
-      requestId,
-      service: "landing-page-roast",
+      resourceId,
+      ...metadata,
     },
     payment_method_types: ["crypto"],
     payment_method_data: {
@@ -140,22 +138,25 @@ async function createPayToAddress(request: Request, requestId: string) {
   depositCache.set(payToAddress, {
     expiresAt: Date.now() + DEPOSIT_TTL_MS,
     paymentIntentId: paymentIntent.id,
-    requestId,
-  });
-
-  updateRequest(requestId, {
-    status: "awaiting_payment",
-    transactionReference: paymentIntent.id,
+    resourceId,
   });
 
   return payToAddress;
 }
 
-export async function handleMppProtectedExecution(
-  request: Request,
-  requestId: string,
-  execute: () => Promise<RoastResult>,
-) {
+export async function handleMppProtectedExecution({
+  request,
+  resourceId,
+  amount,
+  metadata,
+  execute,
+}: {
+  request: Request;
+  resourceId: string;
+  amount: string;
+  metadata: Record<string, string>;
+  execute: () => Promise<JsonValue | Record<string, unknown>>;
+}) {
   if (appEnv.provider !== "stripe_mpp") {
     return Response.json(
       {
@@ -164,11 +165,6 @@ export async function handleMppProtectedExecution(
       },
       { status: 503 },
     );
-  }
-
-  const serviceRequest = getRequest(requestId);
-  if (!serviceRequest) {
-    return Response.json({ error: "Service request not found." }, { status: 404 });
   }
 
   const { Mppx, tempo } = (await import("mppx/server")) as unknown as {
@@ -196,7 +192,7 @@ export async function handleMppProtectedExecution(
     };
   };
 
-  const recipient = await createPayToAddress(request, requestId);
+  const recipient = await createPayToAddress(request, resourceId, amount, metadata);
   const mppx = Mppx.create({
     methods: [
       tempo.charge({
@@ -210,26 +206,19 @@ export async function handleMppProtectedExecution(
 
   const charge = await mppx
     .charge({
-      amount: SERVICE_PRICE_AMOUNT,
+      amount,
       recipient,
     })(request);
 
   if (charge.status === 402) {
     return charge.challenge;
   }
-
-  setRequestStatus(requestId, "processing");
   const result = await execute();
-  setRequestStatus(requestId, "paid");
-
-  const paymentReference = serviceRequest.transactionReference ?? `mpp_${requestId}`;
-  attachRequestResult(requestId, result, paymentReference);
 
   return charge.withReceipt(
     Response.json({
-      requestId,
+      resourceId,
       result,
-      paymentReference,
       provider: "stripe_mpp",
     }),
   );

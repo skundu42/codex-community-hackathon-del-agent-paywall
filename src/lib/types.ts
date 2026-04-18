@@ -1,7 +1,7 @@
-export type ServiceType = "landing-page-roast";
 export type CurrencyCode = "USDC";
+export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
-export type ServiceRequestStatus =
+export type InvocationStatus =
   | "created"
   | "awaiting_payment"
   | "paid"
@@ -17,33 +17,68 @@ export type PaymentStatus =
 
 export type PaymentProvider = "mock" | "stripe_mpp";
 
-export interface RoastInputPayload {
-  websiteUrl?: string;
-  marketingCopy?: string;
-  brandName?: string;
-  targetAudience?: string;
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonObject
+  | JsonValue[];
+
+export interface JsonObject {
+  [key: string]: JsonValue;
 }
 
-export interface RoastResult {
-  summary: string;
-  clarityScore: number;
-  headlineFeedback: string;
-  ctaFeedback: string;
-  conversionSuggestions: string[];
-  trustSignals: string[];
-  processingNotes: string[];
+export interface ApiRouteInput {
+  providerName: string;
+  routeName: string;
+  description?: string;
+  upstreamUrl: string;
+  httpMethod: HttpMethod;
+  priceAmount: string;
+  authHeaderName?: string;
+  authHeaderValue?: string;
+  sampleRequestBody?: string;
 }
 
-export interface ServiceRequest {
+export interface ApiRoute {
   id: string;
-  serviceType: ServiceType;
-  inputPayload: RoastInputPayload;
+  providerName: string;
+  routeName: string;
+  description?: string;
+  upstreamUrl: string;
+  httpMethod: HttpMethod;
   priceAmount: string;
   currency: CurrencyCode;
-  status: ServiceRequestStatus;
+  authHeaderName?: string;
+  authHeaderValue?: string;
+  sampleRequestBody?: string;
+  status: "active";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApiInvocationResult {
+  upstreamStatus: number;
+  upstreamHeaders: Record<string, string>;
+  responseBody: JsonValue | string | null;
+}
+
+export interface InvocationInput {
+  routeId: string;
+  requestBody?: JsonValue;
+}
+
+export interface ApiInvocation {
+  id: string;
+  routeId: string;
+  requestBody?: JsonValue;
+  priceAmount: string;
+  currency: CurrencyCode;
+  status: InvocationStatus;
   paymentSessionId?: string;
   transactionReference?: string;
-  resultPayload?: RoastResult;
+  resultPayload?: ApiInvocationResult;
   errorMessage?: string;
   createdAt: string;
   updatedAt: string;
@@ -51,7 +86,7 @@ export interface ServiceRequest {
 
 export interface PaymentSession {
   id: string;
-  serviceRequestId: string;
+  invocationId: string;
   amount: string;
   currency: CurrencyCode;
   provider: PaymentProvider;

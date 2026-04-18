@@ -15,8 +15,8 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AgentPaywall",
-  description: "MPP on Tempo pay-per-use gateway for premium digital services.",
+  title: "Tempo Gate",
+  description: "MPP compatibility gateway for existing APIs.",
 };
 
 export default function RootLayout({
