@@ -1,6 +1,5 @@
-import { PaywallApp } from "@/components/paywall-app";
-import { appEnv } from "@/lib/env";
+import { SimpleDemoApp } from "@/components/simple-demo-app";
 
 export default function HomePage() {
-  return <PaywallApp provider={appEnv.publicProvider} />;
+  return <SimpleDemoApp />;
 }

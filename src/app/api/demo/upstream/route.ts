@@ -1,25 +1,20 @@
+import { validateLandingPageRoastInput } from "@/lib/gateway";
+import { runLandingPageRoast } from "@/lib/landing-page-roast";
+
 export async function GET() {
   return Response.json({
-    provider: "Demo Provider",
-    message: "This is a sample upstream API response.",
-    receivedMethod: "GET",
-    compatibility: "Ready to be wrapped behind the MPP gateway.",
+    provider: "AgentPaywall",
+    route: "landing-page-roast",
+    description:
+      "Preview the internal landing page roast contract used by the featured paid route.",
   });
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
-  const text = typeof body?.message === "string" ? body.message : "No message provided.";
-  const score = Math.max(55, Math.min(98, 60 + text.length));
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  const result = runLandingPageRoast(
+    validateLandingPageRoastInput(body as never),
+  );
 
-  return Response.json({
-    provider: "Demo Provider",
-    compatibilityScore: score,
-    receivedPayload: body,
-    recommendation:
-      score > 80
-        ? "This API response is already clear and easy to monetize per request."
-        : "Tighten the response contract and pricing metadata before exposing this route to agents.",
-    timestamp: new Date().toISOString(),
-  });
+  return Response.json(result);
 }

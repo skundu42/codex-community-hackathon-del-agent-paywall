@@ -1,225 +1,358 @@
 import crypto from "node:crypto";
 
-import Stripe from "stripe";
+import { Credential, Receipt } from "mppx";
 
 import { appEnv } from "@/lib/env";
-import type { JsonValue } from "@/lib/types";
-
-const TEMPO_TESTNET_PATH_USD = "0x20c0000000000000000000000000000000000000";
-const TEMPO_MAINNET_USDC = "0x20c000000000000000000000b9537d11c60e8b50";
-const DEPOSIT_TTL_MS = 5 * 60 * 1000;
-
-const depositCache = new Map<
-  string,
-  { expiresAt: number; paymentIntentId: string; resourceId: string }
->();
-
-function getStripeClient() {
-  if (!appEnv.stripeSecretKey) {
-    throw new Error("STRIPE_SECRET_KEY is required for Stripe MPP mode.");
-  }
-
-  return new Stripe(appEnv.stripeSecretKey, {
-    apiVersion: "2026-03-04.preview" as any,
-  });
-}
+import { executeInvocationById } from "@/lib/execution";
+import { getMppReplayStore } from "@/lib/mpp-replay-store";
+import { getTempoTokenContract } from "@/lib/payment-provider";
+import {
+  createInvocation,
+  createInvocationRecord,
+  createPaymentSession,
+  createPaymentSessionRecord,
+  findInvocationByRouteAndIdempotencyKey,
+  getInvocationBundle,
+  getPaymentSessionForInvocation,
+  getProvider,
+  setInvocationStatus,
+  setPaymentStatus,
+  updateInvocation,
+} from "@/lib/store";
+import type { ApiRoute, JsonValue, PaymentReceiptPayload, PaymentSession } from "@/lib/types";
 
 function getMppSecretKey() {
-  return (
-    appEnv.mppSecretKey ??
-    crypto.randomBytes(32).toString("base64")
+  return appEnv.mppSecretKey ?? crypto.randomBytes(32).toString("base64");
+}
+
+function responseWithStoredReceipt(response: Response, receipt: Receipt.Receipt) {
+  response.headers.set("Payment-Receipt", Receipt.serialize(receipt));
+  return response;
+}
+
+async function getRouteRecipientAddress(route: ApiRoute) {
+  if (!route.providerId) {
+    throw new Error("This route is missing a provider owner and cannot accept Tempo payments.");
+  }
+
+  const provider = await getProvider(route.providerId);
+  if (!provider) {
+    throw new Error("The seller account for this route no longer exists.");
+  }
+
+  return provider.walletAddress as `0x${string}`;
+}
+
+async function getOrCreateAgentInvocation(options: {
+  route: ApiRoute;
+  requestBody?: JsonValue;
+  idempotencyKey?: string;
+}) {
+  if (options.idempotencyKey) {
+    const existing = await findInvocationByRouteAndIdempotencyKey(
+      options.route.id,
+      options.idempotencyKey,
+    );
+    if (existing) {
+      return existing;
+    }
+  }
+
+  return createInvocation(
+    createInvocationRecord({
+      routeId: options.route.id,
+      callerMode: "agent",
+      requestBody: options.requestBody,
+      priceAmount: options.route.priceAmount,
+      status: "created",
+      idempotencyKey: options.idempotencyKey,
+    }),
   );
 }
 
-function getTempoTokenContract() {
-  return process.env.NODE_ENV === "production"
-    ? TEMPO_MAINNET_USDC
-    : TEMPO_TESTNET_PATH_USD;
-}
-
-function pruneDeposits() {
-  const current = Date.now();
-
-  for (const [address, metadata] of depositCache.entries()) {
-    if (metadata.expiresAt <= current) {
-      depositCache.delete(address);
-    }
-  }
-}
-
-async function createPayToAddress(
-  request: Request,
-  resourceId: string,
-  amount: string,
-  metadata: Record<string, string>,
-) {
-  pruneDeposits();
-
-  const authHeader = request.headers.get("authorization");
-
-  if (authHeader) {
-    const { Credential } = (await import("mppx")) as unknown as {
-      Credential: {
-        extractPaymentScheme(value: string): string | null;
-        fromRequest(req: Request): {
-          challenge: {
-            request: {
-              recipient?: `0x${string}`;
-            };
-          };
-        };
-      };
-    };
-
-    if (Credential.extractPaymentScheme(authHeader)) {
-      const credential = Credential.fromRequest(request);
-      const payToAddress = credential.challenge.request.recipient;
-
-      if (!payToAddress) {
-        throw new Error("Missing pay-to address in MPP credential.");
-      }
-
-      const cached = depositCache.get(payToAddress);
-      if (!cached || cached.resourceId !== resourceId) {
-        throw new Error("Pay-to address is unknown or expired.");
-      }
-
-      return payToAddress;
-    }
+async function ensureTempoPaymentSession(invocationId: string, route: ApiRoute) {
+  const existing = await getPaymentSessionForInvocation(invocationId);
+  if (existing && existing.status !== "expired" && existing.status !== "failed") {
+    return existing;
   }
 
-  const stripe = getStripeClient();
-  const amountInCents = Math.round(Number(amount) * 100);
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount: amountInCents,
-    currency: "usd",
-    confirm: true,
-    metadata: {
-      resourceId,
-      ...metadata,
-    },
-    payment_method_types: ["crypto"],
-    payment_method_data: {
-      type: "crypto",
-    },
-    payment_method_options: {
-      crypto: {
-        mode: "deposit",
-        deposit_options: {
-          networks: ["tempo"],
-        },
-      },
-    },
-  } as Stripe.PaymentIntentCreateParams);
+  const recipient = await getRouteRecipientAddress(route);
+  const payment = await createPaymentSession(
+    createPaymentSessionRecord({
+      invocationId,
+      provider: appEnv.provider === "mock" ? "mock" : "tempo_testnet",
+      amount: route.priceAmount,
+      payToAddress: recipient,
+      supportedTokenContract: getTempoTokenContract(),
+      statusMessage: "Waiting for a Tempo testnet payment credential.",
+    }),
+  );
 
-  const depositDetails = (
-    paymentIntent.next_action as
-      | {
-          crypto_display_details?: {
-            deposit_addresses?: {
-              tempo?: {
-                address?: `0x${string}`;
-                supported_tokens?: Array<{
-                  token_contract_address?: string;
-                }>;
-              };
-            };
-          };
-        }
-      | undefined
-  )?.crypto_display_details;
-
-  const payToAddress = depositDetails?.deposit_addresses?.tempo?.address;
-
-  if (!payToAddress) {
-    throw new Error("PaymentIntent did not include Tempo deposit details.");
-  }
-
-  depositCache.set(payToAddress, {
-    expiresAt: Date.now() + DEPOSIT_TTL_MS,
-    paymentIntentId: paymentIntent.id,
-    resourceId,
+  await updateInvocation(invocationId, {
+    paymentSessionId: payment.id,
+    status: "awaiting_payment",
   });
 
-  return payToAddress;
+  return payment;
 }
 
-export async function handleMppProtectedExecution({
-  request,
-  resourceId,
-  amount,
-  metadata,
-  execute,
-}: {
-  request: Request;
-  resourceId: string;
-  amount: string;
-  metadata: Record<string, string>;
-  execute: () => Promise<JsonValue | Record<string, unknown>>;
-}) {
-  if (appEnv.provider !== "stripe_mpp") {
-    return Response.json(
-      {
-        error:
-          "Real MPP execution is disabled. Set PAYMENTS_PROVIDER=stripe_mpp to enable this route.",
+async function markVerifiedPayment(payment: PaymentSession, receipt: PaymentReceiptPayload) {
+  const updatedPayment = await setPaymentStatus(payment.id, "paid", {
+    receiptPayload: receipt,
+    tempoTxHash: receipt.reference,
+    verificationTimestamp: new Date().toISOString(),
+    statusMessage: "Tempo payment verified.",
+  });
+
+  if (!updatedPayment) {
+    throw new Error("Failed to save the verified payment receipt.");
+  }
+
+  const updatedInvocation = await updateInvocation(payment.invocationId, {
+    status: "paid",
+    transactionReference: receipt.reference,
+  });
+
+  if (!updatedInvocation) {
+    throw new Error("Failed to mark the invocation as paid.");
+  }
+
+  return updatedPayment;
+}
+
+function createMockChallenge(payload: { invocationId: string; route: ApiRoute; recipient: string }) {
+  return Response.json(
+    {
+      error: "Payment required.",
+      provider: "mock",
+      invocationId: payload.invocationId,
+      amount: payload.route.priceAmount,
+      currency: payload.route.currency,
+      recipient: payload.recipient,
+      paymentMethod: "tempo",
+      network: {
+        name: "Tempo Testnet (Moderato)",
+        chainId: 42431,
+        currencyContract: getTempoTokenContract(),
       },
-      { status: 503 },
+      hint: "Retry this request with header x-mock-payment: paid to simulate a settled Tempo payment in local development.",
+    },
+    { status: 402 },
+  );
+}
+
+async function handleMockProtectedExecution(options: {
+  request: Request;
+  route: ApiRoute;
+  requestBody?: JsonValue;
+}) {
+  const idempotencyKey = options.request.headers.get("idempotency-key") ?? undefined;
+  const mockPayment = options.request.headers.get("x-mock-payment");
+  const invocationId = options.request.headers.get("x-invocation-id") ?? undefined;
+
+  let bundle =
+    invocationId ? await getInvocationBundle(invocationId) : undefined;
+
+  if (bundle && bundle.route.id !== options.route.id) {
+    bundle = undefined;
+  }
+
+  if (!bundle) {
+    const invocation = await getOrCreateAgentInvocation({
+      route: options.route,
+      requestBody: options.requestBody,
+      idempotencyKey,
+    });
+    const payment = await ensureTempoPaymentSession(invocation.id, options.route);
+    bundle = {
+      invocation,
+      route: options.route,
+      payment,
+    };
+  }
+
+  if (!bundle.payment) {
+    throw new Error("Payment session was not created.");
+  }
+
+  if (bundle.invocation.resultPayload && bundle.payment.receiptPayload) {
+    return responseWithStoredReceipt(
+      Response.json({
+        resourceId: options.route.slug,
+        invocationId: bundle.invocation.id,
+        result: bundle.invocation.resultPayload,
+        provider: "mock",
+      }),
+      bundle.payment.receiptPayload,
     );
   }
 
-  const { Mppx, tempo } = (await import("mppx/server")) as unknown as {
-    Mppx: {
-      create(config: {
-        methods: unknown[];
-        secretKey: string;
-      }): {
-        charge(config: {
-          amount: string;
-          recipient: `0x${string}`;
-        }): (incomingRequest: Request) => Promise<{
-          status: number;
-          challenge: Response;
-          withReceipt(response: Response): Response;
-        }>;
-      };
-    };
-    tempo: {
-      charge(config: {
-        currency: string;
-        recipient: `0x${string}`;
-        testnet?: boolean;
-      }): unknown;
-    };
+  if (mockPayment !== "paid") {
+    return createMockChallenge({
+      invocationId: bundle.invocation.id,
+      route: options.route,
+      recipient: bundle.payment.payToAddress ?? "unknown",
+    });
+  }
+
+  const receipt: PaymentReceiptPayload = {
+    method: "tempo",
+    reference: `0x${crypto.randomUUID().replaceAll("-", "").padEnd(64, "0").slice(0, 64)}`,
+    status: "success",
+    timestamp: new Date().toISOString(),
+    externalId: bundle.invocation.id,
   };
 
-  const recipient = await createPayToAddress(request, resourceId, amount, metadata);
-  const mppx = Mppx.create({
+  await markVerifiedPayment(bundle.payment, receipt);
+  const execution = await executeInvocationById(bundle.invocation.id);
+  return responseWithStoredReceipt(
+    Response.json({
+      resourceId: options.route.slug,
+      invocationId: bundle.invocation.id,
+      result: execution.result,
+      provider: "mock",
+    }),
+    receipt,
+  );
+}
+
+async function createTempoServer(recipient: `0x${string}`) {
+  const { Mppx, tempo } = await import("mppx/server");
+  return Mppx.create({
     methods: [
       tempo.charge({
         currency: getTempoTokenContract(),
         recipient,
-        testnet: process.env.NODE_ENV !== "production",
+        testnet: true,
+        store: getMppReplayStore(),
       }),
     ],
     secretKey: getMppSecretKey(),
   });
+}
 
+async function handleTempoCredentialExecution(options: {
+  request: Request;
+  route: ApiRoute;
+  requestBody?: JsonValue;
+}) {
+  const credential = Credential.fromRequest(options.request);
+  const invocationId = (credential.challenge.request as { externalId?: string }).externalId;
+
+  if (!invocationId) {
+    return Response.json(
+      { error: "Missing invocation reference in payment credential." },
+      { status: 400 },
+    );
+  }
+
+  const bundle = await getInvocationBundle(invocationId);
+  if (!bundle || bundle.route.id !== options.route.id) {
+    return Response.json(
+      { error: "Payment credential does not match this paid endpoint." },
+      { status: 400 },
+    );
+  }
+
+  const payment = bundle.payment ?? (await ensureTempoPaymentSession(bundle.invocation.id, options.route));
+
+  if (bundle.invocation.resultPayload && payment.receiptPayload) {
+    return responseWithStoredReceipt(
+      Response.json({
+        resourceId: options.route.slug,
+        invocationId: bundle.invocation.id,
+        result: bundle.invocation.resultPayload,
+        provider: "tempo_testnet",
+      }),
+      payment.receiptPayload,
+    );
+  }
+
+  const recipient = payment.payToAddress as `0x${string}` | undefined;
+  if (!recipient) {
+    return Response.json(
+      { error: "Payment session recipient is missing." },
+      { status: 500 },
+    );
+  }
+
+  const mppx = await createTempoServer(recipient);
   const charge = await mppx
     .charge({
-      amount,
-      recipient,
-    })(request);
+      amount: options.route.priceAmount,
+      externalId: bundle.invocation.id,
+      description: `${options.route.routeName} via AgentPaywall`,
+    })(options.request);
 
   if (charge.status === 402) {
     return charge.challenge;
   }
-  const result = await execute();
 
-  return charge.withReceipt(
+  const execution = await executeInvocationById(bundle.invocation.id);
+  const response = charge.withReceipt(
     Response.json({
-      resourceId,
-      result,
-      provider: "stripe_mpp",
+      resourceId: options.route.slug,
+      invocationId: bundle.invocation.id,
+      result: execution.result,
+      provider: "tempo_testnet",
     }),
   );
+  const receipt = Receipt.fromResponse(response);
+  await markVerifiedPayment(payment, receipt);
+  return response;
+}
+
+async function handleTempoChallenge(options: {
+  request: Request;
+  route: ApiRoute;
+  requestBody?: JsonValue;
+}) {
+  const idempotencyKey = options.request.headers.get("idempotency-key") ?? undefined;
+  const invocation = await getOrCreateAgentInvocation({
+    route: options.route,
+    requestBody: options.requestBody,
+    idempotencyKey,
+  });
+  const payment = await ensureTempoPaymentSession(invocation.id, options.route);
+  const recipient = payment.payToAddress as `0x${string}` | undefined;
+
+  if (!recipient) {
+    return Response.json(
+      { error: "Payment session recipient is missing." },
+      { status: 500 },
+    );
+  }
+
+  await setInvocationStatus(invocation.id, "awaiting_payment");
+
+  const mppx = await createTempoServer(recipient);
+  const charge = await mppx
+    .charge({
+      amount: options.route.priceAmount,
+      externalId: invocation.id,
+      description: `${options.route.routeName} via AgentPaywall`,
+    })(options.request);
+
+  return charge.status === 402 ? charge.challenge : Response.json({});
+}
+
+export async function handleMppProtectedExecution({
+  request,
+  route,
+  requestBody,
+}: {
+  request: Request;
+  route: ApiRoute;
+  requestBody?: JsonValue;
+}) {
+  if (appEnv.provider === "mock") {
+    return handleMockProtectedExecution({ request, route, requestBody });
+  }
+
+  const authHeader = request.headers.get("authorization");
+  if (authHeader && Credential.extractPaymentScheme(authHeader)) {
+    return handleTempoCredentialExecution({ request, route, requestBody });
+  }
+
+  return handleTempoChallenge({ request, route, requestBody });
 }

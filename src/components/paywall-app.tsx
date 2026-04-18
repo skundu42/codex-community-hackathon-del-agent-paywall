@@ -1,630 +1,689 @@
 "use client";
 
+import {
+  CopyOutlined,
+  LinkOutlined,
+  PlayCircleOutlined,
+  QrcodeOutlined,
+  ReloadOutlined,
+  SafetyCertificateOutlined,
+} from "@ant-design/icons";
+import {
+  Alert,
+  App as AntApp,
+  Button,
+  Card,
+  Descriptions,
+  Input,
+  List,
+  Result,
+  Space,
+  Statistic,
+  Steps,
+  Tabs,
+  Tag,
+} from "antd";
 import { useEffect, useMemo, useState } from "react";
 
-import { parseInvocationBody } from "@/lib/gateway";
+import QRCode from "qrcode";
+
+import { getExplorerTransactionUrl } from "@/lib/tempo";
+import { Form, FormItem, TextArea } from "@/components/ui/antd";
+import { formatStatusLabel, getInvocationStep, getProviderLabel, getStatusColor } from "@/lib/ui";
 import type {
   ApiInvocation,
   ApiInvocationResult,
-  ApiRoute,
-  HttpMethod,
-  InvocationStatus,
   PaymentSession,
+  PaymentProvider,
+  PublicApiRoute,
 } from "@/lib/types";
 
-const METHOD_OPTIONS: HttpMethod[] = ["POST", "GET", "PUT", "PATCH", "DELETE"];
-
-interface RouteResponse {
-  route: ApiRoute;
-}
-
-interface InvocationResponse {
+interface CreateInvocationResponse {
+  route: PublicApiRoute;
   invocation: ApiInvocation;
-  route?: ApiRoute;
-}
-
-interface PaymentResponse {
   payment: PaymentSession;
 }
 
-interface ResultResponse {
+interface InvocationStateResponse {
+  route: PublicApiRoute;
+  invocation: ApiInvocation;
+  payment?: PaymentSession;
+  explorerUrl?: string | null;
+}
+
+interface ExecuteResponse {
   invocationId: string;
   result: ApiInvocationResult;
   transactionReference?: string;
 }
 
+async function parseOrThrow<T>(response: Response): Promise<T> {
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body.error ?? "Request failed.");
+  }
+
+  return body as T;
+}
+
 export function PaywallApp({
   provider,
+  route,
 }: {
-  provider: "mock" | "stripe_mpp";
+  provider: PaymentProvider;
+  route: PublicApiRoute;
 }) {
-  const [routeForm, setRouteForm] = useState({
-    providerName: "Demo Provider",
-    routeName: "Lead score endpoint",
-    description: "Expose an existing JSON API behind per-call MPP payments.",
-    upstreamUrl: "",
-    httpMethod: "POST" as HttpMethod,
-    priceAmount: "0.02",
-    authHeaderName: "",
-    authHeaderValue: "",
-    sampleRequestBody: JSON.stringify(
-      {
-        customerSegment: "AI agent builders",
-        action: "score",
-        message: "Make this API payable with MPP.",
-      },
-      null,
-      2,
-    ),
+  const { message } = AntApp.useApp();
+  const [form, setForm] = useState({
+    url: "",
+    marketingCopy: "",
+    brandName: "",
+    targetAudience: "",
   });
-  const [invocationBody, setInvocationBody] = useState(routeForm.sampleRequestBody);
-  const [route, setRoute] = useState<ApiRoute | null>(null);
   const [invocation, setInvocation] = useState<ApiInvocation | null>(null);
   const [payment, setPayment] = useState<PaymentSession | null>(null);
   const [result, setResult] = useState<ApiInvocationResult | null>(null);
-  const [transactionReference, setTransactionReference] = useState<string | null>(null);
+  const [explorerUrl, setExplorerUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
+
+  const gatewayUrl = useMemo(() => {
+    if (typeof window === "undefined") {
+      return `/api/mpp/routes/${route.slug}/invoke`;
+    }
+
+    return `${window.location.origin}/api/mpp/routes/${route.slug}/invoke`;
+  }, [route.slug]);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
+    if (!payment?.payToAddress) {
+      setQrCodeDataUrl(null);
       return;
     }
 
-    setRouteForm((current) => ({
-      ...current,
-      upstreamUrl: `${window.location.origin}/api/demo/upstream`,
-    }));
-  }, []);
+    let cancelled = false;
 
-  const gatewayUrl = useMemo(() => {
-    if (!route) {
-      return null;
-    }
+    void QRCode.toDataURL(payment.payToAddress, {
+      width: 220,
+      margin: 1,
+      color: {
+        dark: "#0f1720",
+        light: "#fffdf8",
+      },
+    }).then((dataUrl) => {
+      if (!cancelled) {
+        setQrCodeDataUrl(dataUrl);
+      }
+    });
 
-    if (typeof window === "undefined") {
-      return `/api/mpp/routes/${route.id}/invoke`;
-    }
-
-    return `${window.location.origin}/api/mpp/routes/${route.id}/invoke`;
-  }, [route]);
-
-  const invocationBodyPreview = useMemo(() => {
-    try {
-      return JSON.stringify(parseInvocationBody(invocationBody) ?? {}, null, 2);
-    } catch {
-      return "{\n  \"error\": \"Invocation body is not valid JSON yet\"\n}";
-    }
-  }, [invocationBody]);
-
-  async function parseOrThrow<T>(response: Response): Promise<T> {
-    const body = await response.json();
-
-    if (!response.ok) {
-      throw new Error(body.error ?? "Request failed.");
-    }
-
-    return body as T;
-  }
-
-  async function registerRoute() {
-    setBusyAction("register");
-    setError(null);
-    setInvocation(null);
-    setPayment(null);
-    setResult(null);
-    setTransactionReference(null);
-
-    try {
-      const payload = await parseOrThrow<RouteResponse>(
-        await fetch("/api/routes", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(routeForm),
-        }),
-      );
-
-      setRoute(payload.route);
-      setInvocationBody(payload.route.sampleRequestBody ?? routeForm.sampleRequestBody);
-    } catch (routeError) {
-      setError(routeError instanceof Error ? routeError.message : "Route creation failed.");
-    } finally {
-      setBusyAction(null);
-    }
-  }
+    return () => {
+      cancelled = true;
+    };
+  }, [payment?.payToAddress]);
 
   async function createInvocation() {
-    if (!route) return;
-
-    setBusyAction("invoke");
+    setBusyAction("create");
     setError(null);
-    setPayment(null);
     setResult(null);
-    setTransactionReference(null);
+    setExplorerUrl(null);
 
     try {
-      const payload = await parseOrThrow<InvocationResponse>(
-        await fetch("/api/invocations", {
+      const payload = await parseOrThrow<CreateInvocationResponse>(
+        await fetch(`/api/routes/${route.slug}/invocations`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            routeId: route.id,
-            requestBody: parseInvocationBody(invocationBody),
+            requestBody: {
+              url: form.url,
+              marketingCopy: form.marketingCopy,
+              brandName: form.brandName,
+              targetAudience: form.targetAudience,
+            },
           }),
         }),
       );
 
       setInvocation(payload.invocation);
-    } catch (invocationError) {
+      setPayment(payload.payment);
+      setExplorerUrl(getExplorerTransactionUrl(payload.payment.tempoTxHash));
+    } catch (createError) {
       setError(
-        invocationError instanceof Error ? invocationError.message : "Invocation creation failed.",
+        createError instanceof Error ? createError.message : "Invocation creation failed.",
       );
     } finally {
       setBusyAction(null);
     }
   }
 
-  async function initiatePayment() {
-    if (!invocation) return;
-
-    setBusyAction("payment");
-    setError(null);
+  async function refreshInvocationState() {
+    if (!invocation) {
+      return;
+    }
 
     try {
-      const payload = await parseOrThrow<PaymentResponse>(
-        await fetch("/api/payments/initiate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ invocationId: invocation.id }),
-        }),
+      const payload = await parseOrThrow<InvocationStateResponse>(
+        await fetch(`/api/invocations/${invocation.id}`),
       );
 
-      setPayment(payload.payment);
-      setInvocation((current) =>
-        current ? { ...current, status: "awaiting_payment", paymentSessionId: payload.payment.id } : current,
+      setInvocation(payload.invocation);
+      setPayment(payload.payment ?? null);
+      setExplorerUrl(payload.explorerUrl ?? null);
+      if (payload.invocation.resultPayload) {
+        setResult(payload.invocation.resultPayload);
+      }
+    } catch (refreshError) {
+      setError(
+        refreshError instanceof Error ? refreshError.message : "State refresh failed.",
       );
-    } catch (paymentError) {
-      setError(paymentError instanceof Error ? paymentError.message : "Payment initiation failed.");
-    } finally {
-      setBusyAction(null);
     }
   }
 
   async function simulatePayment() {
-    if (!payment) return;
+    if (!payment) {
+      return;
+    }
 
     setBusyAction("simulate");
     setError(null);
 
     try {
-      const payload = await parseOrThrow<PaymentResponse>(
+      const payload = await parseOrThrow<{ payment: PaymentSession }>(
         await fetch(`/api/payments/${payment.id}/simulate`, { method: "POST" }),
       );
 
       setPayment(payload.payment);
-      setInvocation((current) => (current ? { ...current, status: "paid" } : current));
+      setInvocation((current) =>
+        current ? { ...current, status: "paid" } : current,
+      );
+      setExplorerUrl(getExplorerTransactionUrl(payload.payment.tempoTxHash));
     } catch (simulateError) {
-      setError(simulateError instanceof Error ? simulateError.message : "Payment simulation failed.");
+      setError(
+        simulateError instanceof Error ? simulateError.message : "Payment simulation failed.",
+      );
     } finally {
       setBusyAction(null);
     }
   }
 
   async function executeInvocation() {
-    if (!invocation) return;
+    if (!invocation) {
+      return;
+    }
 
     setBusyAction("execute");
     setError(null);
 
     try {
-      const payload = await parseOrThrow<ResultResponse>(
+      const payload = await parseOrThrow<ExecuteResponse>(
         await fetch(`/api/invocations/${invocation.id}/execute`, { method: "POST" }),
       );
 
       setResult(payload.result);
-      setTransactionReference(payload.transactionReference ?? null);
-      setInvocation((current) => (current ? { ...current, status: "completed" } : current));
+      setInvocation((current) =>
+        current
+          ? {
+              ...current,
+              status: "completed",
+              transactionReference: payload.transactionReference,
+            }
+          : current,
+      );
+      setExplorerUrl(getExplorerTransactionUrl(payload.transactionReference));
     } catch (executeError) {
-      setError(executeError instanceof Error ? executeError.message : "Invocation failed.");
+      setError(
+        executeError instanceof Error ? executeError.message : "Invocation failed.",
+      );
     } finally {
       setBusyAction(null);
     }
   }
 
-  async function refreshPaymentStatus() {
-    if (!payment) return;
-
+  async function copyToClipboard(value: string, label: string) {
     try {
-      const payload = await parseOrThrow<PaymentResponse>(
-        await fetch(`/api/payments/${payment.id}/status`),
-      );
-
-      setPayment(payload.payment);
-      if (payload.payment.status === "paid") {
-        setInvocation((current) => (current ? { ...current, status: "paid" } : current));
-      }
-    } catch (statusError) {
-      setError(statusError instanceof Error ? statusError.message : "Status refresh failed.");
+      await navigator.clipboard.writeText(value);
+      setCopied(label);
+      message.success(`${label} copied.`);
+      window.setTimeout(() => setCopied(null), 1500);
+    } catch {
+      setCopied(null);
+      message.error(`Unable to copy ${label.toLowerCase()}.`);
     }
   }
 
   useEffect(() => {
-    if (!payment || payment.status !== "pending") {
+    if (!invocation) {
+      return;
+    }
+
+    const shouldPoll =
+      invocation.status === "awaiting_payment" ||
+      invocation.status === "paid" ||
+      invocation.status === "processing";
+
+    if (!shouldPoll) {
       return;
     }
 
     const interval = window.setInterval(() => {
-      void refreshPaymentStatus();
+      void refreshInvocationState();
     }, 2000);
 
     return () => window.clearInterval(interval);
-  }, [payment]);
+  }, [invocation?.id, invocation?.status]);
 
   useEffect(() => {
-    if (payment?.status === "paid" && invocation?.status === "paid" && !result && !busyAction) {
+    if (!invocation || !payment || result || busyAction) {
+      return;
+    }
+
+    if (payment.status === "paid" && invocation.status === "paid") {
       void executeInvocation();
     }
-  }, [payment?.status, invocation?.status, result, busyAction]);
+  }, [busyAction, invocation, payment, result]);
 
-  const invocationStatus: InvocationStatus | "idle" = invocation?.status ?? "idle";
+  const isMock = provider === "mock";
+  const landingPageRoastResult =
+    result?.kind === "landing_page_roast" ? result : null;
+  const proxyResult = result?.kind === "proxy" ? result : null;
+  const currentStep = getInvocationStep(invocation?.status, payment?.status, Boolean(result));
 
   return (
-    <div className="shell">
-      <div className="page">
-        <section className="hero">
-          <div className="hero-copy">
-            <div className="eyebrow">MPP compatibility layer for existing APIs</div>
-            <h1>Turn any paid API into an MPP route.</h1>
-            <p className="hero-subtitle">
-              Existing API providers register an upstream endpoint once, assign a per-call
-              price, and let this gateway enforce payment before forwarding the request.
-              Human demos can use the mock payment path; agents can hit the MPP endpoint directly.
-            </p>
+    <div className="page-stack">
+      <section className="hero-surface">
+        <div style={{ padding: 32 }} className="hero-grid">
+          <div className="page-stack">
+            <div className="section-heading">
+              <span className="section-kicker">Buyer demo</span>
+              <h2 className="section-title">Pay once, unlock the roast immediately after verification.</h2>
+              <p className="section-copy">
+                Submit a landing page URL or a block of marketing copy, then watch the request
+                move through creation, payment, and unlock. The service result stays gated until
+                the payment session is verified.
+              </p>
+            </div>
 
-            <div className="hero-grid">
-              <div className="metric">
-                <div className="metric-value">1 route</div>
-                <div className="metric-label">maps one upstream API to one paid gateway endpoint</div>
-              </div>
-              <div className="metric">
-                <div className="metric-value">0.02 USDC</div>
-                <div className="metric-label">example per-call price, configurable per route</div>
-              </div>
-              <div className="metric">
-                <div className="metric-value">{provider === "mock" ? "Demo" : "Live"}</div>
-                <div className="metric-label">mock browser payments or real MPP agent payments</div>
-              </div>
+            <div className="metric-grid">
+              <Card><Statistic title="Service" value={route.routeName} /></Card>
+              <Card><Statistic title="Price" value={`${route.priceAmount} ${route.currency}`} /></Card>
+              <Card><Statistic title="Provider" value={getProviderLabel(provider)} /></Card>
             </div>
           </div>
 
-          <div className="hero-panel">
-            <div className="stack">
-              <div className="pill">Use case: API monetization</div>
-              <strong>Who this is for</strong>
-              <p>Teams with an existing HTTP API that want to add per-call machine payments without rewriting their upstream service.</p>
-            </div>
-            <div className="stack" style={{ marginTop: 18 }}>
-              <strong>What the gateway does</strong>
-              <p>Registers route metadata, creates paid invocations, verifies payment, and proxies the request only after settlement.</p>
-            </div>
-            <div className="stack" style={{ marginTop: 18 }}>
-              <strong>Demo default</strong>
-              <p>The form below points to a built-in upstream endpoint so the whole payment-to-proxy flow works locally out of the box.</p>
-            </div>
-          </div>
-        </section>
+          <Card className="section-surface">
+            <Space orientation="vertical" size={18} style={{ width: "100%" }}>
+              <Tag color="blue">Three-stage flow</Tag>
+              <Steps
+                current={currentStep}
+                items={[
+                  { title: "Submit request", description: "Create the invocation" },
+                  { title: "Pay and verify", description: "Confirm the payment session" },
+                  { title: "Unlock output", description: "Receive the premium result" },
+                ]}
+              />
+              <Descriptions
+                column={1}
+                items={[
+                  { key: "route", label: "Featured route", children: route.routeName },
+                  { key: "rail", label: "Payment rail", children: getProviderLabel(provider) },
+                  {
+                    key: "proof",
+                    label: "Payment proof",
+                    children: payment?.tempoTxHash ?? payment?.receiptPayload?.reference ?? "Available after settlement",
+                  },
+                ]}
+              />
+            </Space>
+          </Card>
+        </div>
+      </section>
 
-        <div className="content-grid">
-          <section className="card">
-            <h2 className="section-title">1. Register an upstream API route</h2>
-            <p className="section-copy">
-              Define the upstream endpoint, the HTTP method, the fixed price, and any server-side auth header this gateway should add before proxying.
-            </p>
+      {error ? <Alert type="error" message={error} showIcon /> : null}
 
-            <div className="form-grid">
-              <div className="field-row">
-                <div className="field">
-                  <label htmlFor="providerName">Provider name</label>
-                  <input
-                    id="providerName"
-                    value={routeForm.providerName}
-                    onChange={(event) =>
-                      setRouteForm((current) => ({ ...current, providerName: event.target.value }))
-                    }
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="routeName">Route name</label>
-                  <input
-                    id="routeName"
-                    value={routeForm.routeName}
-                    onChange={(event) =>
-                      setRouteForm((current) => ({ ...current, routeName: event.target.value }))
-                    }
-                  />
-                </div>
-              </div>
+      <div className="content-grid">
+        <Card className="section-surface">
+          <Space orientation="vertical" size={18} style={{ width: "100%" }}>
+            <div className="section-heading">
+              <span className="section-kicker">1. Submit request</span>
+              <h3 style={{ margin: 0 }}>Create the paid invocation</h3>
+              <p className="section-copy">
+                Provide a URL or marketing copy. Optional brand and audience context helps the
+                roast become more specific.
+              </p>
+            </div>
 
-              <div className="field">
-                <label htmlFor="description">Description</label>
-                <input
-                  id="description"
-                  value={routeForm.description}
+            <Form layout="vertical">
+              <FormItem label="Landing page URL">
+                <Input
+                  placeholder="https://example.com"
+                  value={form.url}
                   onChange={(event) =>
-                    setRouteForm((current) => ({ ...current, description: event.target.value }))
+                    setForm((current) => ({ ...current, url: event.target.value }))
                   }
                 />
-              </div>
+              </FormItem>
 
-              <div className="field">
-                <label htmlFor="upstreamUrl">Upstream URL</label>
-                <input
-                  id="upstreamUrl"
-                  value={routeForm.upstreamUrl}
+              <FormItem label="Or paste the marketing copy">
+                <TextArea
+                  rows={5}
+                  placeholder="Paste the hero section, promise, and CTA copy here..."
+                  value={form.marketingCopy}
                   onChange={(event) =>
-                    setRouteForm((current) => ({ ...current, upstreamUrl: event.target.value }))
-                  }
-                />
-              </div>
-
-              <div className="field-row">
-                <div className="field">
-                  <label htmlFor="httpMethod">HTTP method</label>
-                  <select
-                    id="httpMethod"
-                    className="field-select"
-                    value={routeForm.httpMethod}
-                    onChange={(event) =>
-                      setRouteForm((current) => ({
-                        ...current,
-                        httpMethod: event.target.value as HttpMethod,
-                      }))
-                    }
-                  >
-                    {METHOD_OPTIONS.map((method) => (
-                      <option key={method} value={method}>
-                        {method}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="field">
-                  <label htmlFor="priceAmount">Price per call (USDC)</label>
-                  <input
-                    id="priceAmount"
-                    value={routeForm.priceAmount}
-                    onChange={(event) =>
-                      setRouteForm((current) => ({ ...current, priceAmount: event.target.value }))
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="field-row">
-                <div className="field">
-                  <label htmlFor="authHeaderName">Optional upstream auth header</label>
-                  <input
-                    id="authHeaderName"
-                    placeholder="x-api-key"
-                    value={routeForm.authHeaderName}
-                    onChange={(event) =>
-                      setRouteForm((current) => ({
-                        ...current,
-                        authHeaderName: event.target.value,
-                      }))
-                    }
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="authHeaderValue">Optional upstream auth value</label>
-                  <input
-                    id="authHeaderValue"
-                    placeholder="provider-secret"
-                    value={routeForm.authHeaderValue}
-                    onChange={(event) =>
-                      setRouteForm((current) => ({
-                        ...current,
-                        authHeaderValue: event.target.value,
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="field">
-                <label htmlFor="sampleRequestBody">Sample request body</label>
-                <textarea
-                  id="sampleRequestBody"
-                  value={routeForm.sampleRequestBody}
-                  onChange={(event) =>
-                    setRouteForm((current) => ({
+                    setForm((current) => ({
                       ...current,
-                      sampleRequestBody: event.target.value,
+                      marketingCopy: event.target.value,
                     }))
                   }
                 />
+              </FormItem>
+
+              <div className="detail-grid">
+                <FormItem label="Brand name">
+                  <Input
+                    placeholder="AgentPaywall"
+                    value={form.brandName}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        brandName: event.target.value,
+                      }))
+                    }
+                  />
+                </FormItem>
+
+                <FormItem label="Target audience">
+                  <Input
+                    placeholder="API providers selling to AI agents"
+                    value={form.targetAudience}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        targetAudience: event.target.value,
+                      }))
+                    }
+                  />
+                </FormItem>
               </div>
 
-              <div className="button-row">
-                <button
-                  className="button button-primary"
-                  type="button"
+              <div className="card-actions">
+                <Button
+                  type="primary"
+                  icon={<PlayCircleOutlined />}
+                  loading={busyAction === "create"}
                   disabled={busyAction !== null}
-                  onClick={() => void registerRoute()}
-                >
-                  {busyAction === "register" ? "Registering..." : "Register route"}
-                </button>
-              </div>
-            </div>
-
-            {error ? <div className="banner error">{error}</div> : null}
-          </section>
-
-          <aside className="card">
-            <h2 className="section-title">Route state</h2>
-            <p className="section-copy">
-              The gateway endpoint is what you hand to agents. The upstream URL remains private behind the gateway.
-            </p>
-
-            <div className="status-grid">
-              <div className="status-item">
-                <strong>Registered route</strong>
-                <div className="mono">{route?.id ?? "No route registered yet"}</div>
-                <div className="muted">{route ? `${route.providerName} · ${route.routeName}` : "Create a route first"}</div>
-              </div>
-              <div className="status-item">
-                <strong>Gateway URL</strong>
-                <div className="mono">{gatewayUrl ?? "Generated after route registration"}</div>
-              </div>
-              <div className="status-item">
-                <strong>Invocation state</strong>
-                <div className="muted">Status: {invocationStatus}</div>
-              </div>
-            </div>
-
-            <div className="banner" style={{ marginTop: 18 }}>
-              {provider === "mock"
-                ? "Browser demo mode is active. Payment verification is simulated so you can demo the flow locally."
-                : "Stripe MPP mode is active. Agents can pay directly against the gateway URL."}
-            </div>
-          </aside>
-        </div>
-
-        <section className="content-grid">
-          <div className="card">
-            <h2 className="section-title">2. Create a paid invocation</h2>
-            <p className="section-copy">
-              This simulates what a client would send to the gateway. For the MVP, invocation bodies are JSON only.
-            </p>
-
-            <div className="form-grid">
-              <div className="field">
-                <label htmlFor="invocationBody">Invocation JSON body</label>
-                <textarea
-                  id="invocationBody"
-                  value={invocationBody}
-                  onChange={(event) => setInvocationBody(event.target.value)}
-                />
-              </div>
-
-              <div className="button-row">
-                <button
-                  className="button button-secondary"
-                  type="button"
-                  disabled={!route || busyAction !== null}
                   onClick={() => void createInvocation()}
                 >
-                  {busyAction === "invoke" ? "Creating..." : "Create invocation"}
-                </button>
-                <button
-                  className="button button-secondary"
-                  type="button"
-                  disabled={!invocation || busyAction !== null || result !== null}
-                  onClick={() => void initiatePayment()}
-                >
-                  {busyAction === "payment" ? "Starting payment..." : "Pay and proxy"}
-                </button>
-                <button
-                  className="button button-ghost"
-                  type="button"
-                  disabled={!payment || payment.status !== "pending" || busyAction !== null || provider !== "mock"}
-                  onClick={() => void simulatePayment()}
-                >
-                  {busyAction === "simulate" ? "Verifying..." : "Simulate payment"}
-                </button>
+                  Pay {route.priceAmount} {route.currency} and run
+                </Button>
+
+                {payment ? (
+                  <Button
+                    icon={<ReloadOutlined />}
+                    onClick={() => void refreshInvocationState()}
+                    disabled={busyAction !== null}
+                  >
+                    Refresh status
+                  </Button>
+                ) : null}
+
+                {payment && isMock ? (
+                  <Button
+                    icon={<SafetyCertificateOutlined />}
+                    loading={busyAction === "simulate"}
+                    disabled={busyAction !== null || payment.status === "paid"}
+                    onClick={() => void simulatePayment()}
+                  >
+                    Simulate payment
+                  </Button>
+                ) : null}
               </div>
+            </Form>
+          </Space>
+        </Card>
+
+        <Card className="section-surface status-card">
+          <Space orientation="vertical" size={18} style={{ width: "100%" }}>
+            <div className="section-heading">
+              <span className="section-kicker">2. Pay and verify</span>
+              <h3 style={{ margin: 0 }}>Track the payment session</h3>
             </div>
+
+            <Descriptions
+              column={1}
+              items={[
+                {
+                  key: "invocation",
+                  label: "Invocation",
+                  children: invocation ? (
+                    <Space>
+                      <span className="inline-code">{invocation.id}</span>
+                      <Tag color={getStatusColor(invocation.status)}>
+                        {formatStatusLabel(invocation.status)}
+                      </Tag>
+                    </Space>
+                  ) : (
+                    "Not created yet"
+                  ),
+                },
+                {
+                  key: "payment",
+                  label: "Payment session",
+                  children: payment ? (
+                    <Space>
+                      <span className="inline-code">{payment.id}</span>
+                      <Tag color={getStatusColor(payment.status)}>
+                        {formatStatusLabel(payment.status)}
+                      </Tag>
+                    </Space>
+                  ) : (
+                    "Waiting for invocation"
+                  ),
+                },
+                {
+                  key: "proof",
+                  label: "Proof",
+                  children:
+                    payment?.tempoTxHash ??
+                    payment?.receiptPayload?.reference ??
+                    payment?.mppReference ??
+                    "Available after payment",
+                },
+              ]}
+            />
 
             {payment ? (
-              <div className="banner">
-                <div>Payment ref: <span className="mono">{payment.mppReference}</span></div>
-                {payment.tempoTxHash ? (
-                  <div>Tempo tx: <span className="mono">{payment.tempoTxHash}</span></div>
-                ) : null}
-                <div>{payment.statusMessage}</div>
-              </div>
-            ) : null}
-          </div>
+              <Space orientation="vertical" size={16} style={{ width: "100%" }}>
+                <Alert
+                  type={payment.status === "paid" ? "success" : payment.status === "failed" ? "error" : "info"}
+                  showIcon
+                  message={payment.statusMessage}
+                />
 
-          <div className="card">
-            <h2 className="section-title">3. Proxied result</h2>
-            <p className="section-copy">
-              Once payment verifies, the gateway forwards the request to the provider’s upstream API and returns the upstream response.
-            </p>
+                <Descriptions
+                  column={1}
+                  items={[
+                    {
+                      key: "amount",
+                      label: "Amount",
+                      children: `${payment.amount} ${payment.currency}`,
+                    },
+                    {
+                      key: "token",
+                      label: "Token contract",
+                      children: (
+                        <span className="inline-code">
+                          {payment.supportedTokenContract ?? "Tempo test token"}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: "address",
+                      label: "Pay-to address",
+                      children: (
+                        <span className="inline-code">
+                          {payment.payToAddress ?? "Generated after session creation"}
+                        </span>
+                      ),
+                    },
+                  ]}
+                />
 
-            {result ? (
-              <>
-                <div className="status-grid">
-                  <div className="status-item">
-                    <strong>Upstream status</strong>
-                    <div className="mono">{result.upstreamStatus}</div>
-                  </div>
-                  <div className="status-item">
-                    <strong>Forwarded headers</strong>
-                    <pre className="code">{JSON.stringify(result.upstreamHeaders, null, 2)}</pre>
-                  </div>
-                  <div className="status-item">
-                    <strong>Response body</strong>
-                    <pre className="code">{JSON.stringify(result.responseBody, null, 2)}</pre>
-                  </div>
+                <div className="card-actions">
+                  {payment.payToAddress ? (
+                    <Button
+                      icon={<CopyOutlined />}
+                      onClick={() =>
+                        void copyToClipboard(payment.payToAddress ?? "", "Address")
+                      }
+                    >
+                      {copied === "Address" ? "Copied address" : "Copy address"}
+                    </Button>
+                  ) : null}
+
+                  {explorerUrl ? (
+                    <Button href={explorerUrl} target="_blank" icon={<LinkOutlined />}>
+                      Open explorer
+                    </Button>
+                  ) : null}
                 </div>
-                {transactionReference ? (
-                  <div className="banner success">
-                    Payment reference: <span className="mono">{transactionReference}</span>
+
+                {qrCodeDataUrl ? (
+                  <div className="qr-frame">
+                    <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+                      <Tag icon={<QrcodeOutlined />} color="blue">
+                        Wallet scan
+                      </Tag>
+                      <img src={qrCodeDataUrl} alt="Tempo payment QR code" />
+                    </Space>
                   </div>
                 ) : null}
-              </>
+              </Space>
             ) : (
-              <div className="banner">
-                Result locked. Register a route, create an invocation, and pay before the proxy runs.
-              </div>
+              <Result
+                status="info"
+                title="No payment session yet"
+                subTitle="Create the invocation first to generate a unique payment session."
+              />
             )}
-          </div>
-        </section>
+          </Space>
+        </Card>
+      </div>
 
-        <section className="content-grid">
-          <div className="card">
-            <h2 className="section-title">Agent flow</h2>
-            <p className="section-copy">
-              Agents do not need the browser lifecycle. They call the gateway URL directly, handle the 402 challenge, pay, and then receive the upstream response.
-            </p>
-
-            <div className="how-grid">
-              <div className="how-step">
-                <strong>1. Register provider route once</strong>
-                <p className="muted">This establishes pricing, method, upstream destination, and optional provider auth header.</p>
-              </div>
-              <div className="how-step">
-                <strong>2. Give agents the MPP gateway URL</strong>
-                <p className="muted">They pay this gateway, not the upstream API directly.</p>
-              </div>
-              <div className="how-step">
-                <strong>3. Proxy only after settlement</strong>
-                <p className="muted">The gateway releases the upstream result after the payment rail authorizes the request.</p>
-              </div>
+      <div className="content-grid">
+        <Card className="section-surface">
+          <Space orientation="vertical" size={18} style={{ width: "100%" }}>
+            <div className="section-heading">
+              <span className="section-kicker">3. Unlock result</span>
+              <h3 style={{ margin: 0 }}>Premium output</h3>
+              <p className="section-copy">
+                The result appears only after the payment session has moved to a paid state.
+              </p>
             </div>
 
-            <div className="code">
-              {gatewayUrl
-                ? `curl -X POST ${gatewayUrl} \\\n  -H 'content-type: application/json' \\\n  -d '${invocationBodyPreview}'`
-                : "Register a route to generate the MPP gateway URL."}
-            </div>
-          </div>
+            {landingPageRoastResult ? (
+              <Space orientation="vertical" size={18} style={{ width: "100%" }}>
+                <Card size="small">
+                  <Statistic title="Clarity score" value={landingPageRoastResult.clarityScore} suffix="/100" />
+                  <p className="section-copy" style={{ marginTop: 12 }}>{landingPageRoastResult.summary}</p>
+                </Card>
 
-          <div className="card">
-            <h2 className="section-title">Current assumptions</h2>
-            <p className="section-copy">
-              This keeps the MVP small and avoids inventing provider-side complexity that is not needed for the first demo.
-            </p>
-            <ul className="result-list">
-              <li>Each route has fixed per-call pricing.</li>
-              <li>The MVP supports JSON request bodies and forwards a small safe subset of response headers.</li>
-              <li>Upstream credentials are configured as a single server-side header pair per route.</li>
-              <li>Production hardening still needs SSRF controls, provider auth storage, and persistent data storage.</li>
-            </ul>
-          </div>
-        </section>
+                <Tabs
+                  items={[
+                    {
+                      key: "feedback",
+                      label: "Core feedback",
+                      children: (
+                        <div className="detail-grid">
+                          <Card size="small" title="Headline feedback">
+                            <p className="section-copy">{landingPageRoastResult.headlineFeedback}</p>
+                          </Card>
+                          <Card size="small" title="CTA feedback">
+                            <p className="section-copy">{landingPageRoastResult.ctaFeedback}</p>
+                          </Card>
+                        </div>
+                      ),
+                    },
+                    {
+                      key: "conversion",
+                      label: "Conversion suggestions",
+                      children: (
+                        <List
+                          size="small"
+                          dataSource={landingPageRoastResult.conversionSuggestions}
+                          renderItem={(item) => <List.Item>{item}</List.Item>}
+                        />
+                      ),
+                    },
+                    {
+                      key: "quickwins",
+                      label: "Quick wins",
+                      children: (
+                        <List
+                          size="small"
+                          dataSource={landingPageRoastResult.quickWins}
+                          renderItem={(item) => <List.Item>{item}</List.Item>}
+                        />
+                      ),
+                    },
+                  ]}
+                />
+              </Space>
+            ) : proxyResult ? (
+              <pre className="code-block">{JSON.stringify(proxyResult.responseBody, null, 2)}</pre>
+            ) : (
+              <Result
+                status={payment?.status === "paid" ? "warning" : "info"}
+                title={payment?.status === "paid" ? "Payment received, result pending" : "Result still locked"}
+                subTitle={
+                  payment?.status === "paid"
+                    ? "The service is processing the paid invocation."
+                    : "Create an invocation and settle the payment to reveal the output."
+                }
+              />
+            )}
+          </Space>
+        </Card>
+
+        <Card className="section-surface">
+          <Space orientation="vertical" size={18} style={{ width: "100%" }}>
+            <div className="section-heading">
+              <span className="section-kicker">Agent entrypoint</span>
+              <h3 style={{ margin: 0 }}>The same route can be bought programmatically</h3>
+              <p className="section-copy">
+                Agents call this endpoint, receive a payment challenge, pay, and retry the same request.
+              </p>
+            </div>
+
+            <Descriptions
+              column={1}
+              items={[
+                {
+                  key: "gateway",
+                  label: "Gateway URL",
+                  children: <span className="inline-code">{gatewayUrl}</span>,
+                },
+              ]}
+            />
+
+            <Card size="small" title="Try the challenge with curl">
+              <pre className="code-block">{`curl -i ${gatewayUrl} \\
+  -H 'Content-Type: application/json' \\
+  -d '{"url":"https://example.com","brandName":"Demo","targetAudience":"Judges"}'`}</pre>
+            </Card>
+
+            <Card size="small" title="Pay with mppx">
+              <pre className="code-block">{`npx mppx ${gatewayUrl} \\
+  -X POST \\
+  -H 'Content-Type: application/json' \\
+  -d '{"url":"https://example.com","brandName":"Demo","targetAudience":"Judges"}'`}</pre>
+            </Card>
+
+            <Button icon={<CopyOutlined />} onClick={() => void copyToClipboard(gatewayUrl, "Gateway URL")}>
+              {copied === "Gateway URL" ? "Copied gateway URL" : "Copy gateway URL"}
+            </Button>
+          </Space>
+        </Card>
       </div>
     </div>
   );

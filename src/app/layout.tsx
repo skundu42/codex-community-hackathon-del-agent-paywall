@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { AntdRegistry } from "@ant-design/nextjs-registry";
 import { IBM_Plex_Mono, Space_Grotesk } from "next/font/google";
 
 import "@/app/globals.css";
+import { UiProvider } from "@/components/ui/ui-provider";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -15,8 +17,9 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Tempo Gate",
-  description: "MPP compatibility gateway for existing APIs.",
+  title: "AgentPaywall",
+  description:
+    "Tempo + MPP pay-per-call gateway for premium APIs and digital services.",
 };
 
 export default function RootLayout({
@@ -27,7 +30,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${spaceGrotesk.variable} ${plexMono.variable}`}>
-        {children}
+        <AntdRegistry>
+          <UiProvider>{children}</UiProvider>
+        </AntdRegistry>
       </body>
     </html>
   );

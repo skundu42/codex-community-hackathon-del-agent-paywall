@@ -6,7 +6,7 @@ export async function GET(
 ) {
   try {
     const { invocationId } = await context.params;
-    const invocation = getInvocation(invocationId);
+    const invocation = await getInvocation(invocationId);
 
     if (!invocation) {
       return Response.json({ error: "Invocation not found." }, { status: 404 });
