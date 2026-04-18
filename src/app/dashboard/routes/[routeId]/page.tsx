@@ -1,10 +1,12 @@
-import { redirect } from "next/navigation";
+import { RouteDetailPage } from "@/components/route-detail-page";
 
-export default async function RouteDetailPage({
+export const dynamic = "force-dynamic";
+
+export default async function RouteDetailPageRoute({
   params,
 }: {
   params: Promise<{ routeId: string }>;
 }) {
-  await params;
-  redirect("/");
+  const { routeId } = await params;
+  return <RouteDetailPage routeId={routeId} />;
 }

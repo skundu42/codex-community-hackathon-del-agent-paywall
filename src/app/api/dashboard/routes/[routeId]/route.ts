@@ -40,6 +40,8 @@ export async function GET(
 
   return Response.json({
     route: toPublicRoute(route),
+    discoveryUrl: `${url.origin}/api/routes/${route.slug}`,
+    providerWallet: provider.walletAddress,
     ...buildRouteContract(url.origin, route),
     invocations: invocationDetails,
   });
