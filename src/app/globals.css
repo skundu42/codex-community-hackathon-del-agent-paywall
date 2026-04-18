@@ -82,33 +82,14 @@ pre {
 .app-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
   line-height: 1.2;
-}
-
-.app-brand__mark {
-  width: 40px;
-  height: 40px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #1256d6, #2f8cff);
-  color: #fff;
-  font-weight: 700;
-  box-shadow: 0 14px 26px rgba(18, 86, 214, 0.28);
 }
 
 .app-brand__name {
-  font-size: 1rem;
+  font-size: 1.15rem;
   font-weight: 700;
   line-height: 1.2;
-}
-
-.app-brand__meta {
-  color: #6b7280;
-  font-size: 0.76rem;
-  line-height: 1.2;
+  letter-spacing: -0.02em;
 }
 
 .app-content {
@@ -188,6 +169,25 @@ pre {
   display: grid;
   gap: 16px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.demo-hero-stack {
+  gap: 18px;
+}
+
+.demo-hero-row {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  align-items: start;
+}
+
+.demo-agent-card {
+  max-width: none;
+}
+
+.demo-metric-grid {
+  grid-template-columns: 1fr;
 }
 
 .journey-flow {
@@ -310,7 +310,7 @@ pre {
 }
 
 .hero-grid {
-  grid-template-columns: 1.3fr 0.7fr;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .content-grid {
@@ -379,6 +379,10 @@ pre {
   .content-grid,
   .detail-grid,
   .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .demo-hero-row {
     grid-template-columns: 1fr;
   }
 

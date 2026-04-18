@@ -20,11 +20,7 @@ export function AppShell({
       <Header className="app-header">
         <div className="app-header__inner">
           <Link className="app-brand" href="/">
-            <span className="app-brand__mark">A</span>
-            <div>
-              <div className="app-brand__name">AgentPaywall</div>
-              <div className="app-brand__meta">MPP on Tempo</div>
-            </div>
+            <div className="app-brand__name">AgentPaywall</div>
           </Link>
 
           {headerExtra}
