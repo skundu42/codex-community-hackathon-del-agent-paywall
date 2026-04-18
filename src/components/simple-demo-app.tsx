@@ -121,7 +121,8 @@ export function SimpleDemoApp() {
                 </h1>
                 <p className="section-copy">
                   This page only does one job: generate a monetized endpoint. The next
-                  page will call it, complete payment, and show the unlocked response.
+                  page spins up a fresh agent wallet, funds it on Tempo testnet, pays the
+                  endpoint, and shows the unlocked response.
                 </p>
               </div>
 
@@ -134,7 +135,7 @@ export function SimpleDemoApp() {
                     <div className="journey-step__eyebrow">Step 1</div>
                     <div className="journey-step__title">Generate payment URL</div>
                     <p className="journey-step__copy">
-                      Create a payment URL that allows an on-chain payment to be made.
+                      Create the paid endpoint that the agent will target.
                     </p>
                   </div>
                 </div>
@@ -151,7 +152,7 @@ export function SimpleDemoApp() {
                     <div className="journey-step__eyebrow">Step 2</div>
                     <div className="journey-step__title">Confirm transaction</div>
                     <p className="journey-step__copy">
-                      Wait for the crypto transaction to be confirmed on-chain.
+                      Fund the agent wallet with real Tempo testnet funds.
                     </p>
                   </div>
                 </div>
@@ -168,7 +169,7 @@ export function SimpleDemoApp() {
                     <div className="journey-step__eyebrow">Step 3</div>
                     <div className="journey-step__title">Serve paywalled data</div>
                     <p className="journey-step__copy">
-                      The agent receives the pay-walled data immediately after verification.
+                      The agent pays the endpoint and receives the response immediately.
                     </p>
                   </div>
                 </div>
@@ -262,8 +263,8 @@ export function SimpleDemoApp() {
                   <span className="section-kicker">Endpoint created</span>
                   <h2 style={{ margin: 0 }}>{generated.route.routeName}</h2>
                   <p className="section-copy">
-                    Your paid endpoint is ready. Open the second page to trigger a paid
-                    invocation and reveal the final response after payment verification.
+                    Your paid endpoint is ready. Open page two to watch a dedicated agent
+                    wallet get funded, pay this endpoint, and reveal the final response.
                   </p>
                 </div>
 
@@ -321,7 +322,7 @@ export function SimpleDemoApp() {
                   type="success"
                   showIcon
                   title="Next step"
-                  description="Use the live demo page to create a paid invocation, complete payment, and inspect the unlocked API response."
+                  description="Use the live demo page to fund the agent wallet on Tempo testnet, execute the paid call, and inspect the unlocked API response."
                 />
               </Space>
             ) : (

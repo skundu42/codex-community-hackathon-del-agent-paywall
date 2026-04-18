@@ -4,6 +4,7 @@ import { createSlug, toPublicRoute, validateRouteInput } from "@/lib/gateway";
 import { enforceRateLimit, getClientIpAddress } from "@/lib/rate-limit";
 import { buildRouteContract } from "@/lib/route-contract";
 import { createRoute } from "@/lib/store";
+import { getDemoProviderForRouteCreation } from "@/lib/tempo-agent";
 
 function deriveRouteName(upstreamUrl: string) {
   const url = new URL(upstreamUrl);
@@ -20,6 +21,7 @@ export async function POST(request: Request) {
       windowMs: 60_000,
     });
 
+    const provider = await getDemoProviderForRouteCreation();
     const body = (await request.json()) as {
       upstreamUrl?: string;
       routeName?: string;
@@ -37,7 +39,7 @@ export async function POST(request: Request) {
     const usingBuiltInUpstream = upstreamUrl === builtInDemoUpstreamUrl;
 
     const validated = await validateRouteInput({
-      providerName: "AgentPaywall Demo",
+      providerName: provider.providerName,
       routeName,
       slug,
       description: usingBuiltInUpstream
@@ -53,9 +55,10 @@ export async function POST(request: Request) {
 
     const route = await createRoute({
       id: randomUUID(),
+      providerId: provider.id,
       slug: validated.slug,
       routeKind: validated.routeKind,
-      providerName: validated.providerName,
+      providerName: provider.providerName,
       routeName: validated.routeName,
       description: validated.description,
       upstreamUrl: validated.upstreamUrl,

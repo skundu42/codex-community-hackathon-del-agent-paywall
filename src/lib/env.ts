@@ -1,7 +1,7 @@
 import type { PaymentProvider } from "@/lib/types";
 
 function getPaymentProvider(value: string | undefined): PaymentProvider {
-  const provider = value ?? "mock";
+  const provider = value ?? "tempo_testnet";
 
   if (
     provider !== "mock" &&
