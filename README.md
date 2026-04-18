@@ -4,7 +4,7 @@
 
 # AgentPaywall
 
-AgentPaywall turns an API into a **seller-owned paid endpoint**. Providers create a route, attach a Tempo wallet, and share a stable gateway URL. Agents can call that endpoint, satisfy an **MPP payment challenge**, retry, and receive the result only after payment verification.
+AgentPaywall turns an API into an **agentic endpoint**. Providers create a route, attach a Tempo wallet, and share a stable gateway URL. Agents can call that endpoint, satisfy an **MPP payment challenge**, retry, and receive the result only after payment verification.
 
 Using this any existing api can be turned into agentic APIs.
 
