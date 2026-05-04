@@ -10,8 +10,6 @@ Using this any existing api can be turned into agentic APIs.
 
 ## Demo Video
 
-[![Watch the AgentPaywall demo on YouTube](https://img.youtube.com/vi/XP0RncUUWUI/0.jpg)](https://youtu.be/XP0RncUUWUI)
-
 - A **seller dashboard** for registering providers and publishing paid proxy routes
 - A **buyer / agent demo flow** that provisions and funds a Tempo testnet wallet, then invokes a paid route end to end
 
